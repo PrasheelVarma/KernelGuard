@@ -5,78 +5,63 @@
 - **Python Controller:** BCC Integration — Python `bcc` script that loads the C program into the kernel and prints intercept logs to console.
 
 **Week window:** Monday → Sunday
-**Today:** Wednesday (Day 3)
 
 ---
 
 ## Day-by-Day Breakdown
 
-### ✅ Day 1 (Mon) — Done
-- Repo initialized.
+### Day 1 (Mon) — Repo Init
+- [x] Repository initialized.
 
-### ✅ Day 2 (Tue) — Done
-- README, LICENSE, .gitignore, project structure scaffolded.
+### Day 2 (Tue) — Documentation
+- [x] README, LICENSE, .gitignore, project structure scaffolded.
 
-### 🔲 Day 3 (Wed) — Today: Environment Setup
-- [ ] Confirm Linux environment (native, VM, or WSL2 with kernel access).
-- [ ] Install kernel headers: `linux-headers-$(uname -r)`.
-- [ ] Install BCC toolchain: `bpfcc-tools`, `python3-bpfcc`.
-- [ ] Verify install: run an existing BCC example script (e.g. `hello_world.py` from BCC examples) to confirm the toolchain actually works before writing custom code.
-- [ ] Confirm root/sudo access — eBPF loading requires it.
+### Day 3 (Wed) — Environment Setup
+- [x] Confirmed Linux environment (EndeavourOS, Arch-based).
+- [x] Installed matching kernel headers.
+- [x] Installed BCC toolchain (`bcc`, `bcc-tools`, `python-bcc`).
+- [x] Verified toolchain using a stock BCC example (`execsnoop`) and a Python `bcc` import check.
+- [x] Confirmed root/sudo access for eBPF loading.
 
-**Goal by end of today:** A working BCC environment where you can run *any* existing eBPF example successfully.
+**Result:** Working BCC + eBPF environment, verified functional.
 
----
+### Day 4 (Thu) — eBPF Foundations
+- [x] Wrote `ebpf/execve_trace.c` — eBPF C program hooking the `execve` syscall entry point.
+- [x] Used `bpf_trace_printk()` to emit PID and process name from kernel space.
+- [x] Wrote a Python loader (`test_load.py`) to compile and attach the program, and verified live output.
 
-### 🔲 Day 4 (Thu) — eBPF Foundations (Part 1)
-- [ ] Write `ebpf/execve_trace.c` — minimal eBPF C program hooking the `execve` syscall entry point.
-- [ ] Understand and use `bpf_trace_printk()` (or a BPF map) to emit data from kernel space.
-- [ ] Test-compile the C snippet standalone (syntax sanity check) before wiring it to Python.
+**Result:** eBPF program compiles, loads, and successfully intercepts `execve` calls system-wide, with clean formatted output.
 
-**Goal by end of today:** eBPF C code compiles cleanly (even if not yet loaded via Python).
+> Note: This also satisfies the original Day 5 (BCC Integration) target ahead of schedule — the loader already loads the C program and prints intercept logs to console.
 
----
+### Day 5 (Fri) — Controller Development
+- [ ] Convert the verification loader into the permanent `kernelguard/controller.py`.
+- [ ] Structure the module for reuse (function/class-based, not a standalone script).
 
-### 🔲 Day 5 (Fri) — BCC Integration (Part 1)
-- [ ] Write `kernelguard/controller.py` — Python `bcc` script that:
-  - Loads `execve_trace.c` using `BPF(src_file=...)`.
-  - Attaches the probe to the `execve` syscall.
-- [ ] Get raw kernel trace output printing to console (even unformatted).
+### Day 6 (Sat) — Polish & Formatting
+- [ ] Refine console output (PID, process name, timestamp per intercepted `execve` call).
+- [ ] Add basic error handling (permission errors, missing kernel headers).
+- [ ] Validate against multiple processes.
 
-**Goal by end of today:** Running `python3 controller.py` shows live `execve` events from your system in the terminal.
+### Day 7 (Sun) — Week 1 Wrap-Up
+- [ ] End-to-end retest.
+- [ ] Commit and push all Week 1 code.
+- [ ] Update `README.md` roadmap reference.
+- [ ] Prepare short summary for Week 2 handoff.
 
----
-
-### 🔲 Day 6 (Sat) — Polish & Formatting
-- [ ] Clean up the console output (PID, process name, timestamp per intercepted `execve` call).
-- [ ] Basic error handling (e.g. permission errors if not run as root, missing kernel headers).
-- [ ] Test against a few different processes (e.g. open a new terminal, run `ls`, confirm it gets logged).
-
-**Goal by end of today:** A readable, working live log of `execve` events triggered on the system.
-
----
-
-### 🔲 Day 7 (Sun) — Week 1 Wrap-Up & Review Prep
-- [ ] Re-test end-to-end: fresh terminal → run script → confirm intercepts show up correctly.
-- [ ] Commit and push all Week 1 code (`ebpf/execve_trace.c`, `kernelguard/controller.py`).
-- [ ] Update main `README.md` progress checklist (check off Week 1 items).
-- [ ] Write short notes/summary of what was built — useful for your mentor review and for your own memory when Week 2 (syscall hooking, PID filtering) begins.
-
-**Goal by end of Sunday:** Week 1 fully matches the project doc's target:
+**Target by end of Sunday:** Week 1 fully matches the project doc's requirement —
 > *"BCC Integration: Write the Python bcc script that loads the C program into the kernel and prints intercept logs to the console."*
 
 ---
 
-## Tracking Checklist (quick view)
+## Tracking Checklist
 
 | Day | Focus | Status |
 |---|---|---|
 | Mon | Repo init | ✅ Done |
 | Tue | README + docs | ✅ Done |
-| Wed | Environment setup (BCC, kernel headers) | 🔲 In progress |
-| Thu | eBPF C program (`execve` hook) | 🔲 Pending |
-| Fri | Python `bcc` controller (load + attach) | 🔲 Pending |
+| Wed | Environment setup (BCC, kernel headers) | ✅ Done |
+| Thu | eBPF C program (`execve` hook) + verification loader | ✅ Done |
+| Fri | Python `controller.py` (production version) | 🔲 Pending |
 | Sat | Output polish + error handling | 🔲 Pending |
 | Sun | Testing, commit, push, review prep | 🔲 Pending |
-
----
