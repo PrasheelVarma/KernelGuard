@@ -35,8 +35,11 @@
 > Note: This also satisfies the original Day 5 (BCC Integration) target ahead of schedule — the loader already loads the C program and prints intercept logs to console.
 
 ### Day 5 (Fri) — Controller Development
-- [ ] Convert the verification loader into the permanent `kernelguard/controller.py`.
-- [ ] Structure the module for reuse (function/class-based, not a standalone script).
+- [x] Converted the verification loader into the permanent `kernelguard/controller.py`.
+- [x] Structured as a reusable `ExecveController` class (`load()`, `events()`, `run()`) rather than a standalone script.
+- [x] Verified via `sudo python3 -m kernelguard.controller` — live, correctly formatted `execve` trace output confirmed.
+
+**Result:** Production controller module in place, reusable for future syscall hooks and the upcoming policy engine.
 
 ### Day 6 (Sat) — Polish & Formatting
 - [ ] Refine console output (PID, process name, timestamp per intercepted `execve` call).
@@ -62,6 +65,6 @@
 | Tue | README + docs | ✅ Done |
 | Wed | Environment setup (BCC, kernel headers) | ✅ Done |
 | Thu | eBPF C program (`execve` hook) + verification loader | ✅ Done |
-| Fri | Python `controller.py` (production version) | 🔲 Pending |
+| Fri | Python `controller.py` (production version) | ✅ Done |
 | Sat | Output polish + error handling | 🔲 Pending |
 | Sun | Testing, commit, push, review prep | 🔲 Pending |

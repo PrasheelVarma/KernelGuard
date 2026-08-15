@@ -6,6 +6,31 @@ Format: newest entries at the top.
 
 ---
 
+## Day 5 — Friday — BCC Controller
+
+**Goal for the day:** Replace the Day 4 verification loader with a permanent, reusable controller module.
+
+### Implementation
+- `kernelguard/controller.py` — introduces `ExecveController`, a class wrapping the eBPF load/attach lifecycle:
+  - `load()` — compiles `ebpf/execve_trace.c` and attaches the kprobe.
+  - `events()` — generator yielding decoded trace events as structured dicts (`pid`, `task`, `message`, `timestamp`, `cpu`).
+  - `run()` — convenience method for console output, used by the CLI entry point.
+- eBPF source path is resolved relative to the package location (`Path(__file__).resolve().parent.parent / "ebpf" / "execve_trace.c"`), removing the working-directory assumption the Day 4 script had.
+- `test_load.py` retired; its functionality is fully superseded by this module.
+
+### Design note — generator-based event API
+`events()` yields structured data rather than printing directly, so downstream components (the Week 3 policy engine, future syscall hooks) can consume trace data programmatically instead of parsing console text.
+
+### Verification
+- Ran via `sudo python3 -m kernelguard.controller`.
+- Confirmed correct, live-formatted `execve` trace output matching Day 4 results.
+
+### End-of-day status
+- ✅ `kernelguard/controller.py` — production controller module, verified working.
+- Ready for Day 6: output polish and error handling.
+
+---
+
 ## Day 4 — Thursday — eBPF Foundations
 
 **Goal for the day:** Write a minimal eBPF C program that hooks the `execve` syscall, and verify it loads and traces correctly.
