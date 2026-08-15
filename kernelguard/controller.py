@@ -5,11 +5,26 @@ Loads the eBPF execve tracer, attaches it to the kernel, and streams
 intercepted events.
 """
 
+import os
+import sys
+from datetime import datetime
 from pathlib import Path
 
 from bcc import BPF
 
 EBPF_SOURCE_PATH = Path(__file__).resolve().parent.parent / "ebpf" / "execve_trace.c"
+
+
+class ControllerError(Exception):
+    """Base exception for controller-level failures."""
+
+
+class InsufficientPrivilegesError(ControllerError):
+    """Raised when the process lacks the privileges required to load eBPF programs."""
+
+
+class BPFLoadError(ControllerError):
+    """Raised when the eBPF program fails to compile or attach."""
 
 
 class ExecveController:
@@ -19,16 +34,33 @@ class ExecveController:
         self.source_path = source_path
         self.bpf = None
 
+    def _check_privileges(self) -> None:
+        if os.geteuid() != 0:
+            raise InsufficientPrivilegesError(
+                "eBPF programs require root privileges to load. Re-run with 'sudo'."
+            )
+
+    def _check_source_exists(self) -> None:
+        if not self.source_path.exists():
+            raise ControllerError(f"eBPF source not found: {self.source_path}")
+
     def load(self) -> None:
         """Compile and load the eBPF program, and attach the kprobe."""
-        if not self.source_path.exists():
-            raise FileNotFoundError(f"eBPF source not found: {self.source_path}")
+        self._check_privileges()
+        self._check_source_exists()
 
-        self.bpf = BPF(src_file=str(self.source_path))
-        self.bpf.attach_kprobe(
-            event=self.bpf.get_syscall_fnname("execve"),
-            fn_name="trace_execve",
-        )
+        try:
+            self.bpf = BPF(src_file=str(self.source_path))
+        except Exception as exc:
+            raise BPFLoadError(f"Failed to compile/load eBPF program: {exc}") from exc
+
+        try:
+            self.bpf.attach_kprobe(
+                event=self.bpf.get_syscall_fnname("execve"),
+                fn_name="trace_execve",
+            )
+        except Exception as exc:
+            raise BPFLoadError(f"Failed to attach kprobe to execve: {exc}") from exc
 
     def events(self):
         """Yield decoded trace events as they occur. Generator; blocks until data is available."""
@@ -40,21 +72,28 @@ class ExecveController:
             yield {
                 "timestamp": ts,
                 "pid": pid,
-                "task": task.decode(),
+                "task": task.decode(errors="replace"),
                 "cpu": cpu,
-                "message": msg.decode(),
+                "message": msg.decode(errors="replace"),
             }
 
     def run(self) -> None:
-        """Load the program and print events to the console until interrupted."""
-        self.load()
-        print("Tracing execve() calls. Press Ctrl+C to stop.\n")
+        """Load the program and print formatted events to the console until interrupted."""
+        try:
+            self.load()
+        except ControllerError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"{'TIME':<12} {'PID':<8} {'PROCESS':<16} EVENT")
+        print("-" * 60)
 
         try:
             for event in self.events():
+                clock = datetime.now().strftime("%H:%M:%S")
                 print(
-                    f"[{event['timestamp']:.6f}] "
-                    f"PID {event['pid']:<8} "
+                    f"{clock:<12} "
+                    f"{event['pid']:<8} "
                     f"{event['task']:<16} "
                     f"{event['message']}"
                 )

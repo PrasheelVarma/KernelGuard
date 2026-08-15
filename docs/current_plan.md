@@ -42,9 +42,9 @@
 **Result:** Production controller module in place, reusable for future syscall hooks and the upcoming policy engine.
 
 ### Day 6 (Sat) — Polish & Formatting
-- [ ] Refine console output (PID, process name, timestamp per intercepted `execve` call).
-- [ ] Add basic error handling (permission errors, missing kernel headers).
-- [ ] Validate against multiple processes.
+- [x] Refine console output (PID, process name, timestamp per intercepted `execve` call).
+- [x] Add basic error handling (permission errors, missing kernel headers).
+- [x] Validate against multiple processes.
 
 ### Day 7 (Sun) — Week 1 Wrap-Up
 - [ ] End-to-end retest.
@@ -66,5 +66,5 @@
 | Wed | Environment setup (BCC, kernel headers) | ✅ Done |
 | Thu | eBPF C program (`execve` hook) + verification loader | ✅ Done |
 | Fri | Python `controller.py` (production version) | ✅ Done |
-| Sat | Output polish + error handling | 🔲 Pending |
+| Sat | Output polish + error handling | ✅ Done |
 | Sun | Testing, commit, push, review prep | 🔲 Pending |

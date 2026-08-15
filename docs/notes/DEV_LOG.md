@@ -6,6 +6,33 @@ Format: newest entries at the top.
 
 ---
 
+## Day 6 — Saturday — Output Polish & Error Handling
+
+**Goal for the day:** Refine console output and add proper error handling to the controller.
+
+### Implementation
+- Replaced raw kernel timestamps with wall-clock time (`HH:MM:SS`) for readability.
+- Added a column header + separator line to the console output.
+- Introduced a `ControllerError` exception hierarchy:
+  - `InsufficientPrivilegesError` — raised via an explicit `os.geteuid() != 0` check before attempting to load, producing a clear message instead of an opaque kernel permission failure.
+  - `BPFLoadError` — wraps both the compile step and kprobe-attach step, surfacing readable errors instead of raw tracebacks on failure.
+- `run()` catches `ControllerError` and exits cleanly with a message and non-zero exit code rather than crashing.
+- Trace field decoding now uses `errors="replace"` to avoid crashes on malformed process names.
+
+### Observation — `<...>` in process name column
+Some intercepted events show `<...>` instead of a process name. This is a known BCC/kernel behavior, not a bug: very short-lived processes can trigger the kprobe before the kernel's task info is fully resolvable, so the process name isn't available at capture time.
+
+### Verification
+- Ran `sudo python3 -m kernelguard.controller` — confirmed clean, aligned table output across a range of processes (`bash`, `sh`, `auto-cpufreq`, `cpufreqctl.auto`, `grep`, `cat`, etc.), and graceful shutdown on `Ctrl+C`.
+- Ran `python3 -m kernelguard.controller` (without `sudo`) — confirmed clean error message (`Error: eBPF programs require root privileges to load. Re-run with 'sudo'.`) and non-zero exit, no traceback.
+
+### End-of-day status
+- ✅ Console output polished and readable.
+- ✅ Error handling verified for both the privilege-check and no-sudo paths.
+- Ready for Day 7: end-to-end retest, commit/push, and Week 1 wrap-up.
+
+---
+
 ## Day 5 — Friday — BCC Controller
 
 **Goal for the day:** Replace the Day 4 verification loader with a permanent, reusable controller module.
