@@ -1,0 +1,88 @@
+<svg viewBox="0 0 1000 650" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5568"/>
+    </marker>
+    <linearGradient id="userspace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#eef2ff"/>
+      <stop offset="100%" stop-color="#e0e7ff"/>
+    </linearGradient>
+    <linearGradient id="kernelspace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef2f2"/>
+      <stop offset="100%" stop-color="#fee2e2"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="650" fill="#ffffff"/>
+
+  <text x="500" y="40" text-anchor="middle" font-size="24" font-weight="700" fill="#1a202c">KernelGuard — System Architecture</text>
+
+  <!-- User space zone -->
+  <rect x="40" y="70" width="920" height="240" rx="12" fill="url(#userspace)" stroke="#a5b4fc" stroke-width="1.5"/>
+  <text x="60" y="100" font-size="14" font-weight="700" fill="#4338ca">USER SPACE</text>
+
+  <!-- Security CLI -->
+  <rect x="80" y="130" width="200" height="80" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <text x="180" y="163" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1b4b">Security CLI</text>
+  <text x="180" y="184" text-anchor="middle" font-size="12" fill="#4b5563">argparse / Typer</text>
+
+  <!-- Controller -->
+  <rect x="400" y="130" width="220" height="80" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <text x="510" y="158" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1b4b">Python BPF Controller</text>
+  <text x="510" y="178" text-anchor="middle" font-size="12" fill="#4b5563">ExecveController (bcc)</text>
+  <text x="510" y="196" text-anchor="middle" font-size="11" fill="#6b7280">load() · events() · run()</text>
+
+  <!-- Policy Engine -->
+  <rect x="740" y="130" width="200" height="80" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <text x="840" y="163" text-anchor="middle" font-size="15" font-weight="600" fill="#1e1b4b">Policy Engine</text>
+  <text x="840" y="184" text-anchor="middle" font-size="12" fill="#4b5563">JSON rules (Week 3)</text>
+
+  <!-- Console output -->
+  <rect x="400" y="240" width="220" height="55" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="510" y="272" text-anchor="middle" font-size="13" fill="#374151">Console / Alert Output</text>
+
+  <!-- Kernel space zone -->
+  <rect x="40" y="340" width="920" height="260" rx="12" fill="url(#kernelspace)" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="60" y="370" font-size="14" font-weight="700" fill="#b91c1c">KERNEL SPACE (Ring 0)</text>
+
+  <!-- eBPF program -->
+  <rect x="330" y="400" width="340" height="80" rx="8" fill="#ffffff" stroke="#ef4444" stroke-width="2"/>
+  <text x="500" y="433" text-anchor="middle" font-size="15" font-weight="600" fill="#7f1d1d">eBPF Program (C)</text>
+  <text x="500" y="454" text-anchor="middle" font-size="12" fill="#4b5563">kprobes attached via BCC</text>
+
+  <!-- Syscalls -->
+  <rect x="80" y="520" width="220" height="60" rx="8" fill="#ffffff" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="190" y="555" text-anchor="middle" font-size="14" font-weight="600" fill="#7f1d1d">execve()</text>
+
+  <rect x="390" y="520" width="220" height="60" rx="8" fill="#ffffff" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="500" y="555" text-anchor="middle" font-size="14" font-weight="600" fill="#7f1d1d">tcp_connect()</text>
+
+  <rect x="700" y="520" width="220" height="60" rx="8" fill="#ffffff" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="810" y="555" text-anchor="middle" font-size="14" font-weight="600" fill="#7f1d1d">vfs_write()</text>
+
+  <!-- Arrows: CLI -> Controller -->
+  <line x1="280" y1="170" x2="398" y2="170" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="335" y="163" font-size="10" fill="#4a5568">invokes</text>
+
+  <!-- Controller -> Policy -->
+  <line x1="620" y1="170" x2="738" y2="170" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="655" y="163" font-size="10" fill="#4a5568">checks</text>
+
+  <!-- Controller -> Console -->
+  <line x1="510" y1="210" x2="510" y2="238" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Controller -> eBPF (loads/compiles) -->
+  <line x1="510" y1="210" x2="500" y2="398" stroke="#4a5568" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#arrow)"/>
+  <text x="530" y="300" font-size="11" fill="#4a5568">compiles &amp; loads</text>
+
+  <!-- eBPF -> syscalls -->
+  <line x1="420" y1="480" x2="220" y2="518" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="500" y1="480" x2="500" y2="518" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="580" y1="480" x2="780" y2="518" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="500" y="500" text-anchor="middle" font-size="11" fill="#4a5568">hooks</text>
+
+  <!-- Legend -->
+  <rect x="740" y="240" width="200" height="55" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="840" y="262" text-anchor="middle" font-size="11" fill="#374151">Enforcement:</text>
+  <text x="840" y="280" text-anchor="middle" font-size="11" fill="#374151">allow / log / block (-EPERM)</text>
+</svg>

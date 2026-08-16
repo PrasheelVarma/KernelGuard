@@ -5,6 +5,20 @@ Running notes on environment setup, manual tweaks, gotchas, and things learned a
 Format: newest entries at the top.
 
 ---
+## Supplementary : Architecture & Flow Diagrams
+
+**Goal:** Produce visual documentation of the system design to accompany the written docs.
+
+### Deliverables
+- `docs/diagrams/architecture_diagram.svg` — system architecture showing user space (Security CLI → Python BPF Controller → Policy Engine) versus kernel space (eBPF program hooking `execve`, `tcp_connect`, `vfs_write`), replacing the ASCII version previously embedded in `README.md`.
+- `docs/diagrams/execve_flow_diagram.svg` — step-by-step flow of `execve()` interception: kernel kprobe trigger → `trace_execve()` execution → PID filter decision point (Week 2) → event emission → `ExecveController.events()` → policy enforcement decision point (Week 3).
+- `docs/diagrams/roadmap_diagram.svg` — 4-week development roadmap as a milestone timeline, with Week 1 marked complete.
+
+### Notes
+- The flow diagram intentionally includes decision points for features not yet built (PID filtering, policy enforcement) to serve as a visual reference for upcoming Week 2–3 work, not just a record of what already exists.
+- SVG format chosen for direct rendering support in GitHub-flavored markdown.
+
+---
 
 ## Day 6 — Saturday — Output Polish & Error Handling
 

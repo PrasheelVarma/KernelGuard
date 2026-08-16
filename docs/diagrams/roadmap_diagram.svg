@@ -1,0 +1,60 @@
+<svg viewBox="0 0 1100 500" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5568"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1100" height="500" fill="#ffffff"/>
+  <text x="550" y="40" text-anchor="middle" font-size="22" font-weight="700" fill="#1a202c">KernelGuard — 4-Week Development Roadmap</text>
+
+  <!-- Connecting spine -->
+  <line x1="130" y1="150" x2="970" y2="150" stroke="#cbd5e1" stroke-width="3"/>
+
+  <!-- Week 1 -->
+  <circle cx="130" cy="150" r="14" fill="#16a34a"/>
+  <text x="130" y="156" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">1</text>
+  <rect x="30" y="190" width="200" height="150" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="130" y="215" text-anchor="middle" font-size="14" font-weight="700" fill="#14532d">Week 1</text>
+  <text x="130" y="233" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">Foundations</text>
+  <text x="50" y="256" font-size="11" fill="#374151">• eBPF hook on execve</text>
+  <text x="50" y="274" font-size="11" fill="#374151">• BCC Python controller</text>
+  <text x="50" y="292" font-size="11" fill="#374151">• Console log output</text>
+  <text x="50" y="316" font-size="11" font-weight="600" fill="#16a34a">✓ Complete</text>
+
+  <!-- Week 2 -->
+  <circle cx="380" cy="150" r="14" fill="#2563eb"/>
+  <text x="380" y="156" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">2</text>
+  <rect x="280" y="190" width="200" height="150" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="380" y="215" text-anchor="middle" font-size="14" font-weight="700" fill="#1e3a8a">Week 2</text>
+  <text x="380" y="233" text-anchor="middle" font-size="12" font-weight="600" fill="#1e40af">Expansion</text>
+  <text x="300" y="256" font-size="11" fill="#374151">• Hook tcp_connect</text>
+  <text x="300" y="274" font-size="11" fill="#374151">• Hook vfs_write</text>
+  <text x="300" y="292" font-size="11" fill="#374151">• PID filtering</text>
+  <text x="300" y="316" font-size="10" fill="#374151">Mid-review: audit + perf</text>
+
+  <!-- Week 3 -->
+  <circle cx="630" cy="150" r="14" fill="#d97706"/>
+  <text x="630" y="156" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">3</text>
+  <rect x="530" y="190" width="200" height="150" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+  <text x="630" y="215" text-anchor="middle" font-size="14" font-weight="700" fill="#78350f">Week 3</text>
+  <text x="630" y="233" text-anchor="middle" font-size="12" font-weight="600" fill="#92400e">Enforcement</text>
+  <text x="550" y="256" font-size="11" fill="#374151">• IDS → IPS (blocking)</text>
+  <text x="550" y="274" font-size="11" fill="#374151">• Return -EPERM</text>
+  <text x="550" y="292" font-size="11" fill="#374151">• JSON policy engine</text>
+
+  <!-- Week 4 -->
+  <circle cx="880" cy="150" r="14" fill="#7c3aed"/>
+  <text x="880" y="156" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">4</text>
+  <rect x="780" y="190" width="200" height="150" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="880" y="215" text-anchor="middle" font-size="14" font-weight="700" fill="#4c1d95">Week 4</text>
+  <text x="880" y="233" text-anchor="middle" font-size="12" font-weight="600" fill="#5b21b6">Packaging</text>
+  <text x="800" y="256" font-size="11" fill="#374151">• systemd service</text>
+  <text x="800" y="274" font-size="11" fill="#374151">• Clean hook teardown</text>
+  <text x="800" y="292" font-size="11" fill="#374151">• Polished CLI + alerts</text>
+
+  <!-- Final deliverable banner -->
+  <rect x="30" y="400" width="950" height="60" rx="10" fill="#111827"/>
+  <text x="505" y="425" text-anchor="middle" font-size="13" font-weight="600" fill="#ffffff">Final Deliverable</text>
+  <text x="505" y="445" text-anchor="middle" font-size="11" fill="#d1d5db">A kernel-level security sandbox — invisible to the target script — with a robust Python wrapper for safely running untrusted code</text>
+</svg>

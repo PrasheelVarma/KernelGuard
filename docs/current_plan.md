@@ -47,10 +47,10 @@
 - [x] Validate against multiple processes.
 
 ### Day 7 (Sun) — Week 1 Wrap-Up
-- [ ] End-to-end retest.
-- [ ] Commit and push all Week 1 code.
-- [ ] Update `README.md` roadmap reference.
-- [ ] Prepare short summary for Week 2 handoff.
+- [x] End-to-end retest.
+- [x] Commit and push all Week 1 code.
+- [x] Update `README.md` roadmap reference.
+- [x] Prepare short summary for Week 2 handoff.
 
 **Target by end of Sunday:** Week 1 fully matches the project doc's requirement —
 > *"BCC Integration: Write the Python bcc script that loads the C program into the kernel and prints intercept logs to the console."*
@@ -67,4 +67,4 @@
 | Thu | eBPF C program (`execve` hook) + verification loader | ✅ Done |
 | Fri | Python `controller.py` (production version) | ✅ Done |
 | Sat | Output polish + error handling | ✅ Done |
-| Sun | Testing, commit, push, review prep | 🔲 Pending |
+| Sun | Testing, commit, push, review prep | ✅ Done |
