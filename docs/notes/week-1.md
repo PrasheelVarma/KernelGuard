@@ -1,6 +1,6 @@
 # KernelGuard — Week 1 Plan
 
-**Week 1 Goal (per project doc):**
+**Week 1 Goal :**
 - **Kernel Engineering:** eBPF Foundations — basic eBPF C program that intercepts the `execve` syscall.
 - **Python Controller:** BCC Integration — Python `bcc` script that loads the C program into the kernel and prints intercept logs to console.
 

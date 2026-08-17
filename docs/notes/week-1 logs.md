@@ -5,7 +5,7 @@ Running notes on environment setup, manual tweaks, gotchas, and things learned a
 Format: newest entries at the top.
 
 ---
-## Supplementary : Architecture & Flow Diagrams
+## Day 7 - Supplementary : Architecture & Flow Diagrams
 
 **Goal:** Produce visual documentation of the system design to accompany the written docs.
 
