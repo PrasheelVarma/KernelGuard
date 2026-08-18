@@ -12,16 +12,16 @@
 ## Day-by-Day Breakdown
 
 ### Day 1 (Mon) — PID Filtering (Kernel Side)
-- [ ] Update `ebpf/execve_trace.c` to accept a target PID as a compile-time or map-based filter.
-- [ ] Use a BPF map to pass the target PID from user space into the eBPF program.
-- [ ] Confirm the eBPF program only emits events for the specified PID, not system-wide.
+- [x] Update `ebpf/execve_trace.c` to accept a target PID as a compile-time or map-based filter.
+- [x] Use a BPF map to pass the target PID from user space into the eBPF program.
+- [x] Confirm the eBPF program only emits events for the specified PID, not system-wide.
 
 **Goal by end of today:** eBPF-side PID filtering is functional and testable in isolation.
 
 ### Day 2 (Tue) — PID Filtering (Controller Side)
-- [ ] Update `kernelguard/controller.py` — `ExecveController` accepts a `target_pid` parameter.
-- [ ] Wire the target PID into the BPF map on `load()`.
-- [ ] Add a small CLI entry point (`--pid <PID>`) to test filtering against a real running process.
+- [x] Update `kernelguard/controller.py` — `ExecveController` accepts a `target_pid` parameter.
+- [x] Wire the target PID into the BPF map on `load()`.
+- [x] Add a small CLI entry point (`--pid <PID>`) to test filtering against a real running process.
 
 **Goal by end of today:** Running the controller against a single PID shows only that process's `execve` events.
 
@@ -69,7 +69,7 @@
 | Day | Focus | Status |
 |---|---|---|
 | Mon | PID filtering (kernel side) | ✅ Done |
-| Tue | PID filtering (controller side) | 🔲 Pending |
+| Tue | PID filtering (controller side) | ✅ Done |
 | Wed | `tcp_connect` hook | 🔲 Pending |
 | Thu | `vfs_write` hook | 🔲 Pending |
 | Fri | Unified multi-hook controller | 🔲 Pending |
