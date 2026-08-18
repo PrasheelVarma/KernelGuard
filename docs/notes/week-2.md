@@ -68,7 +68,7 @@
 
 | Day | Focus | Status |
 |---|---|---|
-| Mon | PID filtering (kernel side) | 🔲 Pending |
+| Mon | PID filtering (kernel side) | ✅ Done |
 | Tue | PID filtering (controller side) | 🔲 Pending |
 | Wed | `tcp_connect` hook | 🔲 Pending |
 | Thu | `vfs_write` hook | 🔲 Pending |

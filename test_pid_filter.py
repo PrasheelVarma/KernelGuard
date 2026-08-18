@@ -23,7 +23,7 @@ b = BPF(src_file="ebpf/execve_trace.c")
 b.attach_kprobe(event=b.get_syscall_fnname("execve"), fn_name="trace_execve")
 
 target_pid_map = b["target_pid_map"]
-target_pid_map[0] = target_pid
+target_pid_map[target_pid_map.Key(0)] = target_pid_map.Leaf(target_pid)
 
 print(f"Filtering execve() events for PID {target_pid} only. Press Ctrl+C to stop.\n")
 
