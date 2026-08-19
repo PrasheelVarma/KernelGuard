@@ -26,9 +26,9 @@
 **Goal by end of today:** Running the controller against a single PID shows only that process's `execve` events.
 
 ### Day 3 (Wed) — `tcp_connect` Hook
-- [ ] Write a new eBPF hook (`ebpf/tcp_connect_trace.c` or extend existing file) intercepting `tcp_connect`.
-- [ ] Capture destination IP/port and the calling PID.
-- [ ] Verify via a manual test (e.g. `curl` or `ping` from the target process) that connection attempts are captured.
+- [x] Write a new eBPF hook (`ebpf/tcp_connect_trace.c` or extend existing file) intercepting `tcp_connect`.
+- [x] Capture destination IP/port and the calling PID.
+- [x] Verify via a manual test (e.g. `curl` or `ping` from the target process) that connection attempts are captured.
 
 **Goal by end of today:** Network connection attempts by a target process are visible in trace output.
 
@@ -70,7 +70,7 @@
 |---|---|---|
 | Mon | PID filtering (kernel side) | ✅ Done |
 | Tue | PID filtering (controller side) | ✅ Done |
-| Wed | `tcp_connect` hook | 🔲 Pending |
+| Wed | `tcp_connect` hook | ✅ Done |
 | Thu | `vfs_write` hook | 🔲 Pending |
 | Fri | Unified multi-hook controller | 🔲 Pending |
 | Sat | Mid-Project Review (audit + performance) | 🔲 Pending |

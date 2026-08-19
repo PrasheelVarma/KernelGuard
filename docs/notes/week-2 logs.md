@@ -6,6 +6,49 @@ Format: newest entries at the top.
 
 ---
 
+## Day 3 — Wednesday — `tcp_connect` Hook
+
+**Goal for the day:** Extend the eBPF monitoring from `execve` to `tcp_connect` while preserving the existing PID filtering mechanism.
+
+### Implementation
+
+- Updated `ebpf/execve_trace.c`:
+  - Added a `trace_tcp_connect()` kprobe handler.
+  - Reused the existing `target_pid_map` for PID filtering.
+  - Added a shared `is_target_pid()` helper so both `execve` and `tcp_connect` use the same filtering logic.
+  - The new hook reports the PID and process name when a TCP connection attempt occurs.
+
+- Updated `kernelguard/controller.py`:
+  - Added a kprobe attachment for the kernel `tcp_connect` function.
+  - The existing `execve` hook remains attached.
+  - The controller now monitors both `execve` and `tcp_connect` events.
+
+### Verification
+
+- Confirmed `kernelguard/controller.py` compiles successfully.
+- Loaded the updated eBPF program successfully through the controller.
+- Confirmed both the `execve` and `tcp_connect` kprobes attach without errors.
+- Ran KernelGuard with a specific target PID.
+- Generated a real TCP connection attempt from the target process.
+- Confirmed KernelGuard captured:
+
+```text
+tcp_connect called by PID 15596 (python3)
+This confirmed that the target PID was correctly propagated through the controller and that the new `tcp_connect` eBPF hook captured the network connection event.
+```
+### End-of-day status
+
+- [x] `tcp_connect` eBPF hook implemented.
+- [x] Existing PID filtering reused for `tcp_connect`.
+- [x] Controller updated to attach the `tcp_connect` kprobe.
+- [x] eBPF program successfully compiled and loaded.
+- [x] Real TCP connection attempt successfully captured.
+- [x] Day 3 `tcp_connect` hooking complete.
+
+Ready for Day 4: `vfs_write` hook.
+
+---
+
 ## Day 2 — Tuesday — PID Filtering (Controller Side)
 
 **Goal for the day:** Update the Python controller so a target PID can be supplied at runtime and passed into the eBPF PID filter, allowing KernelGuard to monitor only the selected process.

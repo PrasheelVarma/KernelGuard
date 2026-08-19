@@ -1,8 +1,8 @@
 """
 BPF controller for KernelGuard.
 
-Loads the eBPF execve tracer, applies an optional target PID filter,
-attaches it to the kernel, and streams intercepted events.
+Loads the eBPF execve and tcp_connect tracers, applies an optional
+target PID filter, attaches them to the kernel, and streams intercepted events.
 """
 
 import os
@@ -28,7 +28,7 @@ class BPFLoadError(ControllerError):
 
 
 class ExecveController:
-    """Loads and manages the execve tracing eBPF program."""
+    """Loads and manages the execve and tcp_connect tracing eBPF programs."""
 
     def __init__(
         self,
@@ -65,7 +65,7 @@ class ExecveController:
         target_pid_map[key] = value
 
     def load(self) -> None:
-        """Compile, configure, and load the eBPF program, then attach the kprobe."""
+        """Compile, configure, and load the eBPF programs."""
         self._check_privileges()
         self._check_source_exists()
 
@@ -83,9 +83,15 @@ class ExecveController:
                 event=self.bpf.get_syscall_fnname("execve"),
                 fn_name="trace_execve",
             )
+
+            self.bpf.attach_kprobe(
+                event="tcp_connect",
+                fn_name="trace_tcp_connect",
+            )
+
         except Exception as exc:
             raise BPFLoadError(
-                f"Failed to configure or attach execve kprobe: {exc}"
+                f"Failed to configure or attach eBPF kprobes: {exc}"
             ) from exc
 
     def events(self):
@@ -113,9 +119,12 @@ class ExecveController:
             sys.exit(1)
 
         if self.target_pid:
-            print(f"Monitoring execve events for PID {self.target_pid}.")
+            print(
+                f"Monitoring execve and tcp_connect events "
+                f"for PID {self.target_pid}."
+            )
         else:
-            print("Monitoring execve events for all processes.")
+            print("Monitoring execve and tcp_connect events for all processes.")
 
         print(f"{'TIME':<12} {'PID':<8} {'PROCESS':<16} EVENT")
         print("-" * 60)
