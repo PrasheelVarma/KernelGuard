@@ -1,8 +1,9 @@
 """
 BPF controller for KernelGuard.
 
-Loads the eBPF execve and tcp_connect tracers, applies an optional
-target PID filter, attaches them to the kernel, and streams intercepted events.
+Loads the eBPF execve, tcp_connect, and vfs_write tracers,
+applies an optional target PID filter, attaches them to the
+kernel, and streams intercepted events.
 """
 
 import os
@@ -28,7 +29,7 @@ class BPFLoadError(ControllerError):
 
 
 class ExecveController:
-    """Loads and manages the execve and tcp_connect tracing eBPF programs."""
+    """Loads and manages the execve, tcp_connect, and vfs_write tracing eBPF programs."""
 
     def __init__(
         self,
@@ -89,6 +90,11 @@ class ExecveController:
                 fn_name="trace_tcp_connect",
             )
 
+            self.bpf.attach_kprobe(
+                event="vfs_write",
+                fn_name="trace_vfs_write",
+            )
+
         except Exception as exc:
             raise BPFLoadError(
                 f"Failed to configure or attach eBPF kprobes: {exc}"
@@ -120,11 +126,14 @@ class ExecveController:
 
         if self.target_pid:
             print(
-                f"Monitoring execve and tcp_connect events "
+                f"Monitoring execve, tcp_connect, and vfs_write events "
                 f"for PID {self.target_pid}."
             )
         else:
-            print("Monitoring execve and tcp_connect events for all processes.")
+            print(
+                "Monitoring execve, tcp_connect, and vfs_write events "
+                "for all processes."
+            )
 
         print(f"{'TIME':<12} {'PID':<8} {'PROCESS':<16} EVENT")
         print("-" * 60)
