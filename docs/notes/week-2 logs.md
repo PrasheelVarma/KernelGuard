@@ -5,6 +5,69 @@ Running notes on Week 2 implementation, verification, manual tweaks, gotchas, an
 Format: newest entries at the top.
 
 ---
+## Day 4 — Thursday — `vfs_write` Hook
+
+**Goal for the day:** Extend the eBPF monitoring from `execve` and `tcp_connect` to `vfs_write` while preserving the existing PID filtering mechanism.
+
+### Implementation
+
+- Updated `ebpf/execve_trace.c`:
+  - Added a `trace_vfs_write()` kprobe handler.
+  - Reused the existing `target_pid_map` for PID filtering.
+  - The new hook reports the PID and process name when a `vfs_write` event occurs.
+
+- Updated `kernelguard/controller.py`:
+  - Added a kprobe attachment for the kernel `vfs_write` function.
+  - Kept the existing `execve` and `tcp_connect` kprobe attachments.
+  - Updated the controller status message to report all three monitored hooks.
+
+### Verification
+
+- Confirmed `kernelguard/controller.py` compiles successfully.
+- Loaded the updated eBPF program successfully through the controller.
+- Confirmed the `execve`, `tcp_connect`, and `vfs_write` kprobes attach successfully.
+- Ran KernelGuard with a specific target PID.
+- Created a temporary Python process that performed a real file write.
+- Confirmed KernelGuard captured the filesystem write event for the target process.
+
+Observed event:
+
+```text
+vfs_write called by PID 172194 (python3)
+```
+
+This confirmed that the target PID was correctly propagated through the controller and that the `vfs_write` eBPF hook successfully captured a real filesystem write from the target process.
+
+### Observation
+
+The same `target_pid_map` is shared across all three hooks:
+
+```text
+target_pid_map
+      │
+      ├── execve
+      ├── tcp_connect
+      └── vfs_write
+             │
+             ▼
+        target PID only
+```
+
+The current `vfs_write` event reports the PID and process name. File path extraction is not part of today's implementation.
+
+### End-of-day status
+
+- [x] `vfs_write` eBPF hook implemented.
+- [x] Existing PID filtering reused for `vfs_write`.
+- [x] Controller updated to attach the `vfs_write` kprobe.
+- [x] eBPF program successfully compiled and loaded.
+- [x] All three hooks successfully attached.
+- [x] Real filesystem write successfully captured.
+- [x] Day 4 `vfs_write` hooking complete.
+
+Ready for the next task in the Week 2 plan.
+
+---
 
 ## Day 3 — Wednesday — `tcp_connect` Hook
 

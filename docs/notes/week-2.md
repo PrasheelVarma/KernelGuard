@@ -33,16 +33,16 @@
 **Goal by end of today:** Network connection attempts by a target process are visible in trace output.
 
 ### Day 4 (Thu) — `vfs_write` Hook
-- [ ] Write a new eBPF hook intercepting `vfs_write`.
-- [ ] Capture the file path (or file descriptor) and PID for each write.
-- [ ] Verify via a manual test (e.g. target script writing to a file) that writes are captured.
+- [x] Write a new eBPF hook intercepting `vfs_write`.
+- [x] Capture the file path (or file descriptor) and PID for each write.
+- [x] Verify via a manual test (e.g. target script writing to a file) that writes are captured.
 
 **Goal by end of today:** File write attempts by a target process are visible in trace output.
 
 ### Day 5 (Fri) — Unified Multi-Hook Controller
-- [ ] Refactor `controller.py` so `execve`, `tcp_connect`, and `vfs_write` hooks can run together under one controller instance.
-- [ ] Unify event output format across all three hook types (consistent fields: pid, task, event type, detail).
-- [ ] Confirm all three hooks can run simultaneously without conflict.
+- [x ] Refactor `controller.py` so `execve`, `tcp_connect`, and `vfs_write` hooks can run together under one controller instance.
+- [x] Unify event output format across all three hook types (consistent fields: pid, task, event type, detail).
+- [x] Confirm all three hooks can run simultaneously without conflict.
 
 **Goal by end of today:** A single controller run reports execve, network, and file-write events for a target process.
 
@@ -71,8 +71,8 @@
 | Mon | PID filtering (kernel side) | ✅ Done |
 | Tue | PID filtering (controller side) | ✅ Done |
 | Wed | `tcp_connect` hook | ✅ Done |
-| Thu | `vfs_write` hook | 🔲 Pending |
-| Fri | Unified multi-hook controller | 🔲 Pending |
+| Thu | `vfs_write` hook | ✅ Done |
+| Fri | Unified multi-hook controller | ✅ Done |
 | Sat | Mid-Project Review (audit + performance) | 🔲 Pending |
 | Sun | Testing, commit, push, Week 3 handoff | 🔲 Pending |
 
