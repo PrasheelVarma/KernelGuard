@@ -3,12 +3,12 @@ BPF controller for KernelGuard.
 
 Loads the eBPF execve, tcp_connect, and vfs_write tracers,
 applies an optional target PID filter, attaches them to the
-kernel, and streams intercepted events.
+kernel, normalizes their events, and streams them through
+one unified output format.
 """
 
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from bcc import BPF
@@ -29,7 +29,7 @@ class BPFLoadError(ControllerError):
 
 
 class ExecveController:
-    """Loads and manages the execve, tcp_connect, and vfs_write tracing eBPF programs."""
+    """Loads and manages all KernelGuard eBPF tracing hooks."""
 
     def __init__(
         self,
@@ -66,7 +66,7 @@ class ExecveController:
         target_pid_map[key] = value
 
     def load(self) -> None:
-        """Compile, configure, and load the eBPF programs."""
+        """Compile, configure, and attach all eBPF hooks."""
         self._check_privileges()
         self._check_source_exists()
 
@@ -101,23 +101,42 @@ class ExecveController:
             ) from exc
 
     def events(self):
-        """Yield decoded trace events as they occur."""
+        """
+        Yield normalized events from all attached eBPF hooks.
+
+        Every event has the same structure:
+            pid
+            task
+            event_type
+            detail
+        """
         if self.bpf is None:
             raise RuntimeError("BPF program not loaded. Call load() first.")
 
         while True:
             task, pid, cpu, flags, ts, msg = self.bpf.trace_fields()
 
+            task_name = task.decode(errors="replace")
+            message = msg.decode(errors="replace")
+
+            if message.startswith("execve called"):
+                event_type = "execve"
+            elif message.startswith("tcp_connect called"):
+                event_type = "tcp_connect"
+            elif message.startswith("vfs_write called"):
+                event_type = "vfs_write"
+            else:
+                event_type = "unknown"
+
             yield {
-                "timestamp": ts,
                 "pid": pid,
-                "task": task.decode(errors="replace"),
-                "cpu": cpu,
-                "message": msg.decode(errors="replace"),
+                "task": task_name,
+                "event_type": event_type,
+                "detail": message,
             }
 
     def run(self) -> None:
-        """Load the program and print formatted events until interrupted."""
+        """Load the program and print unified events until interrupted."""
         try:
             self.load()
         except ControllerError as exc:
@@ -135,18 +154,16 @@ class ExecveController:
                 "for all processes."
             )
 
-        print(f"{'TIME':<12} {'PID':<8} {'PROCESS':<16} EVENT")
-        print("-" * 60)
+        print(f"{'PID':<8} {'TASK':<16} {'EVENT TYPE':<16} DETAIL")
+        print("-" * 80)
 
         try:
             for event in self.events():
-                clock = datetime.now().strftime("%H:%M:%S")
-
                 print(
-                    f"{clock:<12} "
                     f"{event['pid']:<8} "
                     f"{event['task']:<16} "
-                    f"{event['message']}"
+                    f"{event['event_type']:<16} "
+                    f"{event['detail']}"
                 )
 
         except KeyboardInterrupt:

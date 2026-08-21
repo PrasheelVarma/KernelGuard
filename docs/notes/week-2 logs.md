@@ -5,6 +5,61 @@ Running notes on Week 2 implementation, verification, manual tweaks, gotchas, an
 Format: newest entries at the top.
 
 ---
+
+## Day 5 — Friday — Unified Multi-Hook Controller
+
+**Goal for the day:** Refactor the controller so `execve`, `tcp_connect`, and `vfs_write` run together under one controller instance and produce a consistent event format.
+
+### Implementation
+
+- Updated `kernelguard/controller.py`:
+  - Kept `execve`, `tcp_connect`, and `vfs_write` attached under the same controller instance.
+  - Added unified event normalization in the `events()` method.
+  - Every intercepted event is converted into the same structure:
+    - `pid`
+    - `task`
+    - `event_type`
+    - `detail`
+  - Updated terminal output to use a consistent format across all three hook types.
+
+- Updated `tests/test_controller.py`:
+  - Added an integration helper for generating activity for the three hooks.
+  - The helper prints its PID and provides a 30-second window for KernelGuard to attach.
+  - Generates a TCP connection attempt.
+  - Performs a filesystem write.
+  - Uses `os.execve()` to replace the current process so the `execve` event remains associated with the same target PID.
+
+### Verification
+
+- Confirmed the controller successfully loads all three eBPF hooks under one controller instance.
+- Confirmed the unified output format is used for intercepted events.
+- Ran the integration helper with a target PID and started KernelGuard using `--pid <PID>`.
+- Confirmed `tcp_connect`, `vfs_write`, and `execve` activity can be generated from the same target process without hook conflicts.
+- Confirmed the PID filtering continues to apply while all three hooks run together.
+
+### Unified event format
+
+All hook events are normalized into:
+
+```text
+PID      TASK             EVENT TYPE       DETAIL
+--------------------------------------------------------------------------------
+<PID>    <task>           execve           <detail>
+<PID>    <task>           tcp_connect      <detail>
+<PID>    <task>           vfs_write        <detail>
+```
+
+### End-of-day status
+
+- [x] Refactored `controller.py` so `execve`, `tcp_connect`, and `vfs_write` hooks run together under one controller instance.
+- [x] Unified event output format across all three hook types.
+- [x] Confirmed all three hooks can run simultaneously without conflict.
+- [x] Day 5 unified multi-hook controller complete.
+
+Week 2 kernel/controller integration tasks are complete.
+
+---
+
 ## Day 4 — Thursday — `vfs_write` Hook
 
 **Goal for the day:** Extend the eBPF monitoring from `execve` and `tcp_connect` to `vfs_write` while preserving the existing PID filtering mechanism.
