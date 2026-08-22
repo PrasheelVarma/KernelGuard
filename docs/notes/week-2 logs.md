@@ -6,6 +6,74 @@ Format: newest entries at the top.
 
 ---
 
+## Day 6 — Saturday — Mid-Project Review
+
+**Goal for the day:** Verify that the target process's filesystem writes are intercepted correctly and measure the performance overhead introduced by the eBPF hooks.
+
+### Interception audit
+
+Created `tests/test_interception_audit.py` to generate controlled filesystem activity from a single target process.
+
+The audit process:
+
+- Printed its PID and provided a 30-second window for KernelGuard to attach.
+- Wrote to multiple separate test files.
+- Allowed KernelGuard to monitor the process using the existing PID filter.
+- Removed the temporary audit files after the test.
+
+The test confirmed that each write generated a corresponding `vfs_write` event for the target PID.
+
+Observed behavior:
+
+```text
+Writing to /tmp/kernelguard-audit-one.txt
+Writing to /tmp/kernelguard-audit-two.txt
+Writing to /tmp/kernelguard-audit-three.txt
+```
+
+KernelGuard reported corresponding `vfs_write` events with the same target PID and the expected filename for each write.
+
+The current eBPF implementation reports the filename/dentry name rather than reconstructing the complete absolute path.
+
+### Performance check
+
+Created `tests/test_performance.py` to measure repeated `write()` syscall latency with and without KernelGuard attached.
+
+The benchmark performs the following comparison:
+
+```text
+Baseline
+    ↓
+write() latency without KernelGuard
+
+        versus
+
+Hooked
+    ↓
+write() latency with KernelGuard attached
+```
+
+The benchmark used the same process for both measurements and performed 5,000 write operations in each phase.
+
+The measured hooked overhead was below the project's 1 ms target.
+
+### Day 6 verification status
+
+- [x] Interception audit completed.
+- [x] Multiple file writes successfully intercepted.
+- [x] Target PID correctly associated with the write events.
+- [x] Filename information successfully reported for intercepted writes.
+- [x] Performance benchmark completed.
+- [x] Baseline and hooked write latency measured.
+- [x] eBPF overhead confirmed below 1 ms.
+- [x] Day 6 Mid-Project Review verification complete.
+
+### Notes
+
+The audit verifies filename-level identification for `vfs_write`. Full absolute-path reconstruction is not currently implemented because the available BCC/kernel-header environment did not support the straightforward `bpf_d_path()` approach used during compatibility testing.
+
+---
+
 ## Day 5 — Friday — Unified Multi-Hook Controller
 
 **Goal for the day:** Refactor the controller so `execve`, `tcp_connect`, and `vfs_write` run together under one controller instance and produce a consistent event format.

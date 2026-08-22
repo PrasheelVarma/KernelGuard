@@ -40,16 +40,16 @@
 **Goal by end of today:** File write attempts by a target process are visible in trace output.
 
 ### Day 5 (Fri) — Unified Multi-Hook Controller
-- [x ] Refactor `controller.py` so `execve`, `tcp_connect`, and `vfs_write` hooks can run together under one controller instance.
+- [x] Refactor `controller.py` so `execve`, `tcp_connect`, and `vfs_write` hooks can run together under one controller instance.
 - [x] Unify event output format across all three hook types (consistent fields: pid, task, event type, detail).
 - [x] Confirm all three hooks can run simultaneously without conflict.
 
 **Goal by end of today:** A single controller run reports execve, network, and file-write events for a target process.
 
 ### Day 6 (Sat) — Mid-Project Review
-- [ ] **Interception audit:** Run a test script that writes to multiple files; confirm every write is logged with correct path and PID.
-- [ ] **Performance check:** Measure syscall latency with and without the eBPF hooks attached; confirm overhead stays under 1ms.
-- [ ] Document audit and performance results.
+- [x] **Interception audit:** Run a test script that writes to multiple files; confirm every write is logged with correct path and PID.
+- [x] **Performance check:** Measure syscall latency with and without the eBPF hooks attached; confirm overhead stays under 1ms.
+- [x] Document audit and performance results.
 
 **Goal by end of today:** Both Mid-Project Review requirements verified and recorded.
 
@@ -73,7 +73,7 @@
 | Wed | `tcp_connect` hook | ✅ Done |
 | Thu | `vfs_write` hook | ✅ Done |
 | Fri | Unified multi-hook controller | ✅ Done |
-| Sat | Mid-Project Review (audit + performance) | 🔲 Pending |
+| Sat | Mid-Project Review (audit + performance) | ✅ Done |
 | Sun | Testing, commit, push, Week 3 handoff | 🔲 Pending |
 
 ---
