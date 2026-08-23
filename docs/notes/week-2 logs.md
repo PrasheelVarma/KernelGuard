@@ -5,6 +5,15 @@ Running notes on Week 2 implementation, verification, manual tweaks, gotchas, an
 Format: newest entries at the top.
 
 ---
+### Day 7 (Sun) — Week 2 Wrap-Up
+- [x] End-to-end retest of all three hooks together, with PID filtering active.
+- [x] Commit and push all Week 2 code.
+- [x] Update `README.md` roadmap reference if needed.
+- [x] Prepare summary for Week 3 handoff (policy engine, active blocking).
+
+**Goal by end of Sunday:** Week 2 fully matches the project doc's requirement —
+> *"Task Routing / Syscall Hooking: hook tcp_connect and vfs_write. PID Filtering: only the target process is monitored."*
+---
 
 ## Day 6 — Saturday — Mid-Project Review
 

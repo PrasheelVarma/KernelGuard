@@ -54,10 +54,10 @@
 **Goal by end of today:** Both Mid-Project Review requirements verified and recorded.
 
 ### Day 7 (Sun) — Week 2 Wrap-Up
-- [ ] End-to-end retest of all three hooks together, with PID filtering active.
-- [ ] Commit and push all Week 2 code.
-- [ ] Update `README.md` roadmap reference if needed.
-- [ ] Prepare summary for Week 3 handoff (policy engine, active blocking).
+- [x] End-to-end retest of all three hooks together, with PID filtering active.
+- [x] Commit and push all Week 2 code.
+- [x] Update `README.md` roadmap reference if needed.
+- [x] Prepare summary for Week 3 handoff (policy engine, active blocking).
 
 **Target by end of Sunday:** Week 2 fully matches the project doc's requirement —
 > *"Task Routing / Syscall Hooking: hook tcp_connect and vfs_write. PID Filtering: only the target process is monitored."*
@@ -74,7 +74,7 @@
 | Thu | `vfs_write` hook | ✅ Done |
 | Fri | Unified multi-hook controller | ✅ Done |
 | Sat | Mid-Project Review (audit + performance) | ✅ Done |
-| Sun | Testing, commit, push, Week 3 handoff | 🔲 Pending |
+| Sun | Testing, commit, push, Week 3 handoff | ✅ Done |
 
 ---
 

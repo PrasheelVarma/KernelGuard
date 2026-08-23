@@ -123,7 +123,7 @@ class ExecveController:
                 event_type = "execve"
             elif message.startswith("tcp_connect called"):
                 event_type = "tcp_connect"
-            elif message.startswith("vfs_write called"):
+            elif message.startswith("vfs_write"):
                 event_type = "vfs_write"
             else:
                 event_type = "unknown"
