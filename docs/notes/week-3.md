@@ -60,12 +60,12 @@ The goal is to keep the existing Week 2 monitoring behavior intact while adding 
 
 ### Day 1 (Mon) — Policy Model & JSON Configuration
 
-- [ ] Define the JSON policy format for network and filesystem rules.
-- [ ] Implement the initial policy-loading module.
-- [ ] Support explicit allowed IP addresses.
-- [ ] Support explicit allowed file paths.
-- [ ] Define clear default behavior for resources not present in the allow lists.
-- [ ] Validate malformed or missing policy configuration with useful errors.
+- [x] Define the JSON policy format for network and filesystem rules.
+- [x] Implement the initial policy-loading module.
+- [x] Support explicit allowed IP addresses.
+- [x] Support explicit allowed file paths.
+- [x] Define clear default behavior for resources not present in the allow lists.
+- [x] Validate malformed or missing policy configuration with useful errors.
 
 **Primary files:**
 
@@ -163,7 +163,7 @@ policy.json
 
 | Day | Focus | Status |
 |---|---|---|
-| Mon | Policy model & JSON configuration | 🔲 Pending |
+| Mon | Policy model & JSON configuration | ✅ Done |
 | Tue | Policy engine integration | 🔲 Pending |
 | Wed | eBPF active blocking foundation | 🔲 Pending |
 | Thu | Network enforcement | 🔲 Pending |

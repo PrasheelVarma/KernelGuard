@@ -2,9 +2,12 @@
 BPF controller for KernelGuard.
 
 Loads the eBPF execve, tcp_connect, and vfs_write tracers,
-applies an optional target PID filter, attaches them to the
-kernel, normalizes their events, and streams them through
-one unified output format.
+applies an optional target PID filter, loads the JSON policy,
+normalizes events, and evaluates network/filesystem events
+against the policy.
+
+Day 2 adds policy decisions only. Actual kernel-level blocking
+(-EPERM) is intentionally deferred to the Week 3 enforcement work.
 """
 
 import os
@@ -13,7 +16,11 @@ from pathlib import Path
 
 from bcc import BPF
 
+from .policy import Policy, PolicyError
+
+
 EBPF_SOURCE_PATH = Path(__file__).resolve().parent.parent / "ebpf" / "execve_trace.c"
+DEFAULT_POLICY_PATH = Path(__file__).resolve().parent.parent / "policy.json"
 
 
 class ControllerError(Exception):
@@ -21,7 +28,7 @@ class ControllerError(Exception):
 
 
 class InsufficientPrivilegesError(ControllerError):
-    """Raised when the process lacks the privileges required to load eBPF programs."""
+    """Raised when the process lacks privileges required to load eBPF programs."""
 
 
 class BPFLoadError(ControllerError):
@@ -29,19 +36,22 @@ class BPFLoadError(ControllerError):
 
 
 class ExecveController:
-    """Loads and manages all KernelGuard eBPF tracing hooks."""
+    """Loads, manages, and evaluates KernelGuard eBPF tracing hooks."""
 
     def __init__(
         self,
         target_pid: int = 0,
         source_path: Path = EBPF_SOURCE_PATH,
+        policy_path: Path = DEFAULT_POLICY_PATH,
     ):
         if target_pid < 0:
             raise ValueError("target_pid must be 0 or a positive PID")
 
         self.target_pid = target_pid
         self.source_path = source_path
+        self.policy_path = policy_path
         self.bpf = None
+        self.policy = None
 
     def _check_privileges(self) -> None:
         if os.geteuid() != 0:
@@ -52,6 +62,12 @@ class ExecveController:
     def _check_source_exists(self) -> None:
         if not self.source_path.exists():
             raise ControllerError(f"eBPF source not found: {self.source_path}")
+
+    def _load_policy(self) -> None:
+        try:
+            self.policy = Policy(self.policy_path)
+        except PolicyError as exc:
+            raise ControllerError(f"Failed to load policy: {exc}") from exc
 
     def _configure_target_pid(self) -> None:
         """Write the target PID into the eBPF target_pid_map."""
@@ -66,9 +82,10 @@ class ExecveController:
         target_pid_map[key] = value
 
     def load(self) -> None:
-        """Compile, configure, and attach all eBPF hooks."""
+        """Load the policy, compile the eBPF program, and attach all hooks."""
         self._check_privileges()
         self._check_source_exists()
+        self._load_policy()
 
         try:
             self.bpf = BPF(src_file=str(self.source_path))
@@ -100,15 +117,65 @@ class ExecveController:
                 f"Failed to configure or attach eBPF kprobes: {exc}"
             ) from exc
 
+    @staticmethod
+    def _extract_detail_value(message: str, prefix: str) -> str | None:
+        """Extract a value following a known event prefix."""
+        if not message.startswith(prefix):
+            return None
+
+        value = message[len(prefix):].strip()
+        return value or None
+
+    def _evaluate_policy(self, event_type: str, detail: str) -> str:
+        """Return ALLOW, DENY, or MONITOR for a normalized event."""
+        if self.policy is None:
+            raise RuntimeError("Policy not loaded.")
+
+        if event_type == "execve":
+            return "MONITOR"
+
+        if event_type == "tcp_connect":
+            destination = self._extract_detail_value(
+                detail,
+                "tcp_connect PID ",
+            )
+
+            if destination is None:
+                return "DENY"
+
+            return (
+                "ALLOW"
+                if self.policy.check_network(destination)
+                else "DENY"
+            )
+
+        if event_type == "vfs_write":
+            filename = self._extract_detail_value(
+                detail,
+                "vfs_write PID ",
+            )
+
+            if filename is None:
+                return "DENY"
+
+            return (
+                "ALLOW"
+                if self.policy.check_filesystem(filename)
+                else "DENY"
+            )
+
+        return "MONITOR"
+
     def events(self):
         """
         Yield normalized events from all attached eBPF hooks.
 
-        Every event has the same structure:
+        Every event has:
             pid
             task
             event_type
             detail
+            decision
         """
         if self.bpf is None:
             raise RuntimeError("BPF program not loaded. Call load() first.")
@@ -128,15 +195,18 @@ class ExecveController:
             else:
                 event_type = "unknown"
 
+            decision = self._evaluate_policy(event_type, message)
+
             yield {
                 "pid": pid,
                 "task": task_name,
                 "event_type": event_type,
                 "detail": message,
+                "decision": decision,
             }
 
     def run(self) -> None:
-        """Load the program and print unified events until interrupted."""
+        """Load the program and print policy-aware events until interrupted."""
         try:
             self.load()
         except ControllerError as exc:
@@ -154,8 +224,9 @@ class ExecveController:
                 "for all processes."
             )
 
-        print(f"{'PID':<8} {'TASK':<16} {'EVENT TYPE':<16} DETAIL")
-        print("-" * 80)
+        print(f"Policy: {self.policy_path}")
+        print(f"{'PID':<8} {'TASK':<16} {'EVENT TYPE':<16} {'DECISION':<10} DETAIL")
+        print("-" * 100)
 
         try:
             for event in self.events():
@@ -163,6 +234,7 @@ class ExecveController:
                     f"{event['pid']:<8} "
                     f"{event['task']:<16} "
                     f"{event['event_type']:<16} "
+                    f"{event['decision']:<10} "
                     f"{event['detail']}"
                 )
 

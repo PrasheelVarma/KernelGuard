@@ -97,9 +97,9 @@ class Policy:
             )
 
         self.network_allowed_ips = set(allowed_ips)
-        self.filesystem_allowed_paths = set(
+        self.filesystem_allowed_paths = {
             self._normalize_path(path) for path in allowed_paths
-        )
+        }
 
     @staticmethod
     def _normalize_path(path: str) -> str:
@@ -112,8 +112,7 @@ class Policy:
 
     def is_path_allowed(self, file_path: str) -> bool:
         """Return True when the filesystem path is explicitly allowed."""
-        normalized_path = self._normalize_path(file_path)
-        return normalized_path in self.filesystem_allowed_paths
+        return self._normalize_path(file_path) in self.filesystem_allowed_paths
 
     def check_network(self, ip_address: str) -> bool:
         """Evaluate a network destination against the policy."""
