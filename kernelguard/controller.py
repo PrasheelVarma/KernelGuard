@@ -6,11 +6,15 @@ applies an optional target PID filter, loads the JSON policy,
 normalizes events, and evaluates network/filesystem events
 against the policy.
 
-Day 2 adds policy decisions only. Actual kernel-level blocking
-(-EPERM) is intentionally deferred to the Week 3 enforcement work.
+Day 3 connects the existing eBPF event stream to the policy
+engine and normalizes tcp_connect/vfs_write details before
+policy evaluation. Actual kernel-level blocking (-EPERM) is
+intentionally deferred to the enforcement work.
 """
 
 import os
+import socket
+import struct
 import sys
 from pathlib import Path
 
@@ -19,8 +23,15 @@ from bcc import BPF
 from .policy import Policy, PolicyError
 
 
-EBPF_SOURCE_PATH = Path(__file__).resolve().parent.parent / "ebpf" / "execve_trace.c"
-DEFAULT_POLICY_PATH = Path(__file__).resolve().parent.parent / "policy.json"
+EBPF_SOURCE_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "ebpf"
+    / "execve_trace.c"
+)
+DEFAULT_POLICY_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "policy.json"
+)
 
 
 class ControllerError(Exception):
@@ -56,18 +67,23 @@ class ExecveController:
     def _check_privileges(self) -> None:
         if os.geteuid() != 0:
             raise InsufficientPrivilegesError(
-                "eBPF programs require root privileges to load. Re-run with 'sudo'."
+                "eBPF programs require root privileges to load. "
+                "Re-run with 'sudo'."
             )
 
     def _check_source_exists(self) -> None:
         if not self.source_path.exists():
-            raise ControllerError(f"eBPF source not found: {self.source_path}")
+            raise ControllerError(
+                f"eBPF source not found: {self.source_path}"
+            )
 
     def _load_policy(self) -> None:
         try:
             self.policy = Policy(self.policy_path)
         except PolicyError as exc:
-            raise ControllerError(f"Failed to load policy: {exc}") from exc
+            raise ControllerError(
+                f"Failed to load policy: {exc}"
+            ) from exc
 
     def _configure_target_pid(self) -> None:
         """Write the target PID into the eBPF target_pid_map."""
@@ -118,13 +134,63 @@ class ExecveController:
             ) from exc
 
     @staticmethod
-    def _extract_detail_value(message: str, prefix: str) -> str | None:
-        """Extract a value following a known event prefix."""
-        if not message.startswith(prefix):
+    def _decode_ipv4(value: str) -> str | None:
+        """
+        Convert the 32-bit integer emitted by the eBPF tcp_connect
+        hook into dotted-decimal IPv4 notation.
+
+        The sockaddr_in address is stored in network byte order,
+        while the value is read/printed as a native u32. On the
+        x86_64 development environment this requires little-endian
+        packing before converting the bytes as an IPv4 address.
+        """
+        try:
+            ip_value = int(value)
+            if not 0 <= ip_value <= 0xFFFFFFFF:
+                return None
+
+            return socket.inet_ntoa(
+                struct.pack("<I", ip_value)
+            )
+        except (ValueError, OSError, struct.error):
             return None
 
-        value = message[len(prefix):].strip()
-        return value or None
+    @staticmethod
+    def _normalize_event(message: str) -> tuple[str, str]:
+        """
+        Convert a raw trace message into an event type and policy
+        detail value.
+
+        The returned detail is the actual value consumed by the
+        policy engine:
+            tcp_connect -> dotted-decimal IPv4 address
+            vfs_write   -> filesystem path
+            execve      -> original trace message
+        """
+        if message.startswith("execve called"):
+            return "execve", message
+
+        if message.startswith("tcp_connect ip="):
+            raw_ip = message[len("tcp_connect ip="):].strip()
+            ip_address = ExecveController._decode_ipv4(raw_ip)
+
+            if ip_address is None:
+                return "tcp_connect", ""
+
+            return "tcp_connect", ip_address
+
+        if message.startswith("vfs_write PID "):
+            separator = ": "
+
+            if separator not in message:
+                return "vfs_write", ""
+
+            _, filename = message.split(separator, 1)
+            filename = filename.strip()
+
+            return "vfs_write", filename
+
+        return "unknown", message
 
     def _evaluate_policy(self, event_type: str, detail: str) -> str:
         """Return ALLOW, DENY, or MONITOR for a normalized event."""
@@ -135,32 +201,22 @@ class ExecveController:
             return "MONITOR"
 
         if event_type == "tcp_connect":
-            destination = self._extract_detail_value(
-                detail,
-                "tcp_connect PID ",
-            )
-
-            if destination is None:
+            if not detail:
                 return "DENY"
 
             return (
                 "ALLOW"
-                if self.policy.check_network(destination)
+                if self.policy.check_network(detail)
                 else "DENY"
             )
 
         if event_type == "vfs_write":
-            filename = self._extract_detail_value(
-                detail,
-                "vfs_write PID ",
-            )
-
-            if filename is None:
+            if not detail:
                 return "DENY"
 
             return (
                 "ALLOW"
-                if self.policy.check_filesystem(filename)
+                if self.policy.check_filesystem(detail)
                 else "DENY"
             )
 
@@ -178,7 +234,9 @@ class ExecveController:
             decision
         """
         if self.bpf is None:
-            raise RuntimeError("BPF program not loaded. Call load() first.")
+            raise RuntimeError(
+                "BPF program not loaded. Call load() first."
+            )
 
         while True:
             task, pid, cpu, flags, ts, msg = self.bpf.trace_fields()
@@ -186,22 +244,17 @@ class ExecveController:
             task_name = task.decode(errors="replace")
             message = msg.decode(errors="replace")
 
-            if message.startswith("execve called"):
-                event_type = "execve"
-            elif message.startswith("tcp_connect called"):
-                event_type = "tcp_connect"
-            elif message.startswith("vfs_write"):
-                event_type = "vfs_write"
-            else:
-                event_type = "unknown"
-
-            decision = self._evaluate_policy(event_type, message)
+            event_type, detail = self._normalize_event(message)
+            decision = self._evaluate_policy(
+                event_type,
+                detail,
+            )
 
             yield {
                 "pid": pid,
                 "task": task_name,
                 "event_type": event_type,
-                "detail": message,
+                "detail": detail,
                 "decision": decision,
             }
 
@@ -215,17 +268,23 @@ class ExecveController:
 
         if self.target_pid:
             print(
-                f"Monitoring execve, tcp_connect, and vfs_write events "
-                f"for PID {self.target_pid}."
+                "Monitoring execve, tcp_connect, and vfs_write "
+                f"events for PID {self.target_pid}."
             )
         else:
             print(
-                "Monitoring execve, tcp_connect, and vfs_write events "
-                "for all processes."
+                "Monitoring execve, tcp_connect, and vfs_write "
+                "events for all processes."
             )
 
         print(f"Policy: {self.policy_path}")
-        print(f"{'PID':<8} {'TASK':<16} {'EVENT TYPE':<16} {'DECISION':<10} DETAIL")
+        print(
+            f"{'PID':<8} "
+            f"{'TASK':<16} "
+            f"{'EVENT TYPE':<16} "
+            f"{'DECISION':<10} "
+            "DETAIL"
+        )
         print("-" * 100)
 
         try:
