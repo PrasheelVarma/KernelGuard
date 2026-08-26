@@ -80,12 +80,12 @@ policy.json
 
 ### Day 2 (Tue) — Policy Engine Integration
 
-- [ ] Connect the Python policy engine to the existing controller.
-- [ ] Load the policy when KernelGuard starts.
-- [ ] Convert monitored event information into policy-check inputs.
-- [ ] Implement allow/deny decisions for `tcp_connect`.
-- [ ] Implement allow/deny decisions for `vfs_write`.
-- [ ] Keep `execve` monitoring available while policy support is introduced.
+- [x] Connect the Python policy engine to the existing controller.
+- [x] Load the policy when KernelGuard starts.
+- [x] Convert monitored event information into policy-check inputs.
+- [x] Implement allow/deny decisions for `tcp_connect`.
+- [x] Implement allow/deny decisions for `vfs_write`.
+- [x] Keep `execve` monitoring available while policy support is introduced.
 
 **Goal by end of today:** The controller can evaluate intercepted network and filesystem activity against the JSON policy.
 
@@ -164,7 +164,7 @@ policy.json
 | Day | Focus | Status |
 |---|---|---|
 | Mon | Policy model & JSON configuration | ✅ Done |
-| Tue | Policy engine integration | 🔲 Pending |
+| Tue | Policy engine integration | ✅ Done |
 | Wed | eBPF active blocking foundation | 🔲 Pending |
 | Thu | Network enforcement | 🔲 Pending |
 | Fri | Filesystem enforcement | 🔲 Pending |
