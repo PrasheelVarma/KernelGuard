@@ -6,15 +6,17 @@ applies an optional target PID filter, loads the JSON policy,
 normalizes events, and evaluates network/filesystem events
 against the policy.
 
-Day 3 connects the existing eBPF event stream to the policy
-engine and normalizes tcp_connect/vfs_write details before
-policy evaluation. Actual kernel-level blocking (-EPERM) is
-intentionally deferred to the enforcement work.
+Week 3 Day 3 adds the kernel-side enforcement foundation:
+policy entries are loaded into BPF maps and BPF LSM hooks can
+return -EPERM for denied IPv4 connections and file writes.
+
+Enforcement is opt-in so normal monitoring remains unchanged
+unless the CLI is started with --enforce.
 """
 
+import ctypes as ct
+import ipaddress
 import os
-import socket
-import struct
 import sys
 from pathlib import Path
 
@@ -47,11 +49,12 @@ class BPFLoadError(ControllerError):
 
 
 class ExecveController:
-    """Loads, manages, and evaluates KernelGuard eBPF tracing hooks."""
+    """Loads, manages, evaluates, and optionally enforces KernelGuard policy."""
 
     def __init__(
         self,
         target_pid: int = 0,
+        enforce: bool = False,
         source_path: Path = EBPF_SOURCE_PATH,
         policy_path: Path = DEFAULT_POLICY_PATH,
     ):
@@ -59,6 +62,7 @@ class ExecveController:
             raise ValueError("target_pid must be 0 or a positive PID")
 
         self.target_pid = target_pid
+        self.enforce = enforce
         self.source_path = source_path
         self.policy_path = policy_path
         self.bpf = None
@@ -87,21 +91,95 @@ class ExecveController:
 
     def _configure_target_pid(self) -> None:
         """Write the target PID into the eBPF target_pid_map."""
-        if self.bpf is None:
-            raise RuntimeError("BPF program not loaded.")
-
         target_pid_map = self.bpf["target_pid_map"]
-
         key = target_pid_map.Key(0)
         value = target_pid_map.Leaf(self.target_pid)
-
         target_pid_map[key] = value
 
+    def _configure_enforcement(self) -> None:
+        """Enable or disable kernel-side enforcement in the eBPF program."""
+        enforcement_map = self.bpf["enforcement_enabled"]
+        key = enforcement_map.Key(0)
+        value = enforcement_map.Leaf(1 if self.enforce else 0)
+        enforcement_map[key] = value
+
+    @staticmethod
+    def _network_key(ip_address: str) -> int:
+        """
+        Convert an IPv4 address into the native u32 representation used
+        by the BPF map when the sockaddr bytes are read on x86_64.
+        """
+        address = ipaddress.ip_address(ip_address)
+
+        if address.version != 4:
+            raise ValueError(
+                f"Only IPv4 policy entries are supported: {ip_address}"
+            )
+
+        return int.from_bytes(
+            address.packed,
+            byteorder="little",
+        )
+
+    def _load_network_policy(self) -> None:
+        """Populate the BPF IPv4 allowlist from the loaded policy."""
+        network_map = self.bpf["network_allowed_map"]
+
+        for ip_address in self.policy.network_allowed_ips:
+            try:
+                key = network_map.Key(
+                    self._network_key(ip_address)
+                )
+                value = network_map.Leaf(1)
+                network_map[key] = value
+            except ValueError as exc:
+                raise ControllerError(
+                    f"Invalid network policy entry: {ip_address}"
+                ) from exc
+
+    def _load_filesystem_policy(self) -> None:
+        """
+        Populate the BPF filesystem allowlist with device/inode pairs.
+
+        The kernel LSM hook works with the inode attached to the file,
+        so user space resolves each configured path once with stat().
+        """
+        filesystem_map = self.bpf["filesystem_allowed_map"]
+
+        for file_path in self.policy.filesystem_allowed_paths:
+            try:
+                stat_result = os.stat(file_path)
+            except OSError:
+                # A path that does not exist cannot currently be mapped
+                # to an inode. The policy engine still retains the path.
+                continue
+
+            key = filesystem_map.Key()
+            key.dev = stat_result.st_dev
+            key.ino = stat_result.st_ino
+
+            value = filesystem_map.Leaf(1)
+            filesystem_map[key] = value
+
+    def _configure_policy_maps(self) -> None:
+        """Load policy allowlists and enforcement state into BPF maps."""
+        self._configure_target_pid()
+        self._load_network_policy()
+        self._load_filesystem_policy()
+        self._configure_enforcement()
+
     def load(self) -> None:
-        """Load the policy, compile the eBPF program, and attach all hooks."""
+        """Load policy, compile eBPF, configure maps, and attach kprobes."""
         self._check_privileges()
         self._check_source_exists()
         self._load_policy()
+
+        if not BPF.support_lsm():
+            raise BPFLoadError(
+                "BPF LSM is not available on this kernel. "
+                "KernelGuard active enforcement requires "
+                "CONFIG_BPF_LSM and the BPF LSM enabled in CONFIG_LSM."
+            )
 
         try:
             self.bpf = BPF(src_file=str(self.source_path))
@@ -111,7 +189,7 @@ class ExecveController:
             ) from exc
 
         try:
-            self._configure_target_pid()
+            self._configure_policy_maps()
 
             self.bpf.attach_kprobe(
                 event=self.bpf.get_syscall_fnname("execve"),
@@ -130,43 +208,32 @@ class ExecveController:
 
         except Exception as exc:
             raise BPFLoadError(
-                f"Failed to configure or attach eBPF kprobes: {exc}"
+                f"Failed to configure or attach eBPF enforcement/tracing hooks: {exc}"
             ) from exc
 
     @staticmethod
     def _decode_ipv4(value: str) -> str | None:
-        """
-        Convert the 32-bit integer emitted by the eBPF tcp_connect
-        hook into dotted-decimal IPv4 notation.
-
-        The sockaddr_in address is stored in network byte order,
-        while the value is read/printed as a native u32. On the
-        x86_64 development environment this requires little-endian
-        packing before converting the bytes as an IPv4 address.
-        """
+        """Convert the u32 emitted by tcp_connect tracing to dotted IPv4."""
         try:
             ip_value = int(value)
+
             if not 0 <= ip_value <= 0xFFFFFFFF:
                 return None
 
-            return socket.inet_ntoa(
-                struct.pack("<I", ip_value)
+            return str(
+                ipaddress.ip_address(
+                    int.from_bytes(
+                        ip_value.to_bytes(4, byteorder="little"),
+                        byteorder="big",
+                    )
+                )
             )
-        except (ValueError, OSError, struct.error):
+        except ValueError:
             return None
 
     @staticmethod
     def _normalize_event(message: str) -> tuple[str, str]:
-        """
-        Convert a raw trace message into an event type and policy
-        detail value.
-
-        The returned detail is the actual value consumed by the
-        policy engine:
-            tcp_connect -> dotted-decimal IPv4 address
-            vfs_write   -> filesystem path
-            execve      -> original trace message
-        """
+        """Convert a raw trace message into an event type and policy detail."""
         if message.startswith("execve called"):
             return "execve", message
 
@@ -174,21 +241,25 @@ class ExecveController:
             raw_ip = message[len("tcp_connect ip="):].strip()
             ip_address = ExecveController._decode_ipv4(raw_ip)
 
-            if ip_address is None:
-                return "tcp_connect", ""
-
-            return "tcp_connect", ip_address
+            return "tcp_connect", ip_address or raw_ip
 
         if message.startswith("vfs_write PID "):
             separator = ": "
 
-            if separator not in message:
-                return "vfs_write", ""
+            if separator in message:
+                _, filename = message.split(separator, 1)
+                return "vfs_write", filename.strip()
 
-            _, filename = message.split(separator, 1)
-            filename = filename.strip()
+            return "vfs_write", message
 
-            return "vfs_write", filename
+        if message.startswith("BLOCK tcp_connect ip="):
+            raw_ip = message[len("BLOCK tcp_connect ip="):].strip()
+            ip_address = ExecveController._decode_ipv4(raw_ip)
+
+            return "tcp_connect", ip_address or raw_ip
+
+        if message.startswith("BLOCK vfs_write PID "):
+            return "vfs_write", message
 
         return "unknown", message
 
@@ -201,9 +272,6 @@ class ExecveController:
             return "MONITOR"
 
         if event_type == "tcp_connect":
-            if not detail:
-                return "DENY"
-
             return (
                 "ALLOW"
                 if self.policy.check_network(detail)
@@ -211,7 +279,7 @@ class ExecveController:
             )
 
         if event_type == "vfs_write":
-            if not detail:
+            if detail.startswith("vfs_write PID "):
                 return "DENY"
 
             return (
@@ -223,23 +291,17 @@ class ExecveController:
         return "MONITOR"
 
     def events(self):
-        """
-        Yield normalized events from all attached eBPF hooks.
-
-        Every event has:
-            pid
-            task
-            event_type
-            detail
-            decision
-        """
+        """Yield normalized events with controller-side policy decisions."""
         if self.bpf is None:
             raise RuntimeError(
                 "BPF program not loaded. Call load() first."
             )
 
         while True:
-            task, pid, cpu, flags, ts, msg = self.bpf.trace_fields()
+            try:
+                task, pid, cpu, flags, ts, msg = self.bpf.trace_fields()
+            except ValueError:
+                continue
 
             task_name = task.decode(errors="replace")
             message = msg.decode(errors="replace")
@@ -266,18 +328,21 @@ class ExecveController:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
 
-        if self.target_pid:
-            print(
-                "Monitoring execve, tcp_connect, and vfs_write "
-                f"events for PID {self.target_pid}."
-            )
-        else:
-            print(
-                "Monitoring execve, tcp_connect, and vfs_write "
-                "events for all processes."
-            )
+        scope = (
+            f"PID {self.target_pid}"
+            if self.target_pid
+            else "all processes"
+        )
 
+        mode = "ENFORCEMENT ENABLED" if self.enforce else "MONITORING ONLY"
+
+        print(
+            "Monitoring execve, tcp_connect, and vfs_write events "
+            f"for {scope}."
+        )
         print(f"Policy: {self.policy_path}")
+        print(f"Mode: {mode}")
+
         print(
             f"{'PID':<8} "
             f"{'TASK':<16} "
@@ -298,7 +363,8 @@ class ExecveController:
                 )
 
         except KeyboardInterrupt:
-            print("\nStopped.")
+            print("
+Stopped.")
 
 
 def main() -> None:
