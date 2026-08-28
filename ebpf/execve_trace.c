@@ -16,6 +16,10 @@
 #include <uapi/linux/errno.h>
 #include <uapi/linux/ptrace.h>
 
+#ifndef MAY_WRITE
+#define MAY_WRITE 0x00000002
+#endif
+
 BPF_ARRAY(target_pid_map, u32, 1);
 BPF_ARRAY(enforcement_enabled, u32, 1);
 
@@ -259,17 +263,21 @@ LSM_PROBE(socket_connect,
  * preserve_access_index.
  */
 struct kg_super_block {
+    char pad[16];
     dev_t s_dev;
-} __attribute__((preserve_access_index));
+};
 
 struct kg_inode {
-    u64 i_ino;
+    char pad1[40];
     struct kg_super_block* i_sb;
-} __attribute__((preserve_access_index));
+    char pad2[16];
+    u64 i_ino;
+};
 
 struct kg_file {
+    char pad[32];
     struct kg_inode* f_inode;
-} __attribute__((preserve_access_index));
+};
 
 LSM_PROBE(file_permission,
     struct file* file,
@@ -286,21 +294,34 @@ LSM_PROBE(file_permission,
     }
 
     struct kg_file* kg_file = (struct kg_file*)file;
+    struct kg_inode* inode = NULL;
 
-    if (kg_file->f_inode == NULL) {
+    bpf_probe_read_kernel(&inode, sizeof(inode), &kg_file->f_inode);
+
+    if (inode == NULL) {
         return 0;
     }
 
-    struct kg_inode* inode = kg_file->f_inode;
+    // Only enforce policy on regular files to prevent blocking stdout/stderr
+    unsigned short i_mode = 0;
+    bpf_probe_read_kernel(&i_mode, sizeof(i_mode), inode);
+    
+    if ((i_mode & 00170000) != 0100000) { // (i_mode & S_IFMT) != S_IFREG
+        return 0;
+    }
 
-    if (inode->i_sb == NULL) {
+    struct kg_super_block* sb = NULL;
+
+    bpf_probe_read_kernel(&sb, sizeof(sb), &inode->i_sb);
+
+    if (sb == NULL) {
         return 0;
     }
 
     struct filesystem_key key = { };
 
-    key.ino = inode->i_ino;
-    key.dev = (u64)inode->i_sb->s_dev;
+    bpf_probe_read_kernel(&key.ino, sizeof(key.ino), &inode->i_ino);
+    bpf_probe_read_kernel(&key.dev, sizeof(key.dev), &sb->s_dev);
 
     if (is_filesystem_allowed(&key)) {
         return 0;

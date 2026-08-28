@@ -131,14 +131,14 @@ policy.json
 
 ### Day 6 (Sat) — End-to-End Policy & Enforcement Audit
 
-- [ ] Create a policy containing both allowed and denied network destinations.
-- [ ] Create a policy containing both allowed and denied filesystem paths.
-- [ ] Run a target test process that attempts both allowed and unauthorized operations.
-- [ ] Confirm allowed operations succeed.
-- [ ] Confirm unauthorized operations return `-EPERM`.
-- [ ] Confirm KernelGuard reports the corresponding enforcement events.
-- [ ] Confirm unrelated processes remain unaffected by target-PID filtering.
-- [ ] Verify policy reload/error behavior if applicable.
+- [x] Create a policy containing both allowed and denied network destinations.
+- [x] Create a policy containing both allowed and denied filesystem paths.
+- [x] Run a target test process that attempts both allowed and unauthorized operations.
+- [x] Confirm allowed operations succeed.
+- [x] Confirm unauthorized operations return `-EPERM`.
+- [x] Confirm KernelGuard reports the corresponding enforcement events.
+- [x] Confirm unrelated processes remain unaffected by target-PID filtering.
+- [x] Verify policy reload/error behavior if applicable.
 
 **Goal by end of today:** The complete policy → controller → eBPF enforcement path is verified end-to-end.
 
@@ -168,7 +168,7 @@ policy.json
 | Wed | eBPF active blocking foundation | ✅ Done |
 | Thu | Network enforcement | ✅ Done |
 | Fri | Filesystem enforcement | ✅ Done |
-| Sat | End-to-end policy & enforcement audit | 🔲 Pending |
+| Sat | End-to-end policy & enforcement audit | ✅ Done |
 | Sun | Week 3 wrap-up & Week 4 handoff | 🔲 Pending |
 
 ---

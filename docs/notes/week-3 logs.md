@@ -6,6 +6,36 @@ Format: newest entries at the top.
 
 ---
 
+## Day 6 — Saturday — End-to-End Policy & Enforcement Audit
+
+**Goal:** Run an end-to-end test of KernelGuard using a dedicated audit script to verify that allowed operations succeed and unauthorized ones return `-EPERM`.
+
+### Implementation
+
+- Created `tests/test_enforcement_audit.py` which runs the controller in `--enforce` mode and attempts network and file writes.
+- **Issue Discovered:** When the test script ran, the controller printed a massive flood of `vfs_write DENY` logs, and the test script exited prematurely without printing its results.
+- **Root Cause:** KernelGuard's `file_permission` hook was so aggressive that it enforced the policy against *all* file descriptors, including character devices like `/dev/pts/X` (the terminal's standard output). When `print()` was called by the python script, it was blocked with `-EPERM` because the terminal was not in the `policy.json` allowed paths, causing the script to crash.
+- **Fix Applied:** Updated `file_permission` in `ebpf/execve_trace.c` to read `i_mode` from the inode and use `(i_mode & S_IFMT) != S_IFREG` to explicitly skip non-regular files (like stdout, stderr, sockets, and character devices). 
+
+### Verification
+
+- Re-ran the audit script after applying the `i_mode` filter. The script was able to output text to the terminal successfully, while KernelGuard correctly blocked connections to `10.0.0.1` and writes to the unauthorized regular file (`/tmp/kernelguard-unauthorized.txt`). 
+- Allowed IPs (`1.1.1.1`) and allowed paths (`/tmp/kernelguard-test.txt`) were permitted successfully.
+
+### End-of-day status
+
+- [x] Create a policy containing both allowed and denied network destinations.
+- [x] Create a policy containing both allowed and denied filesystem paths.
+- [x] Run a target test process that attempts both allowed and unauthorized operations.
+- [x] Confirm allowed operations succeed.
+- [x] Confirm unauthorized operations return `-EPERM`.
+- [x] Confirm KernelGuard reports the corresponding enforcement events.
+- [x] Fixed aggressive stdout/stderr blocking by filtering for `S_IFREG`.
+
+**Day 6 End-to-End Policy & Enforcement Audit complete.**
+
+---
+
 ## Day 5 — Friday — Filesystem Enforcement
 
 **Goal:** Apply policy enforcement to `vfs_write`, denying unauthorized writes with `-EPERM`.
