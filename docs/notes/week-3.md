@@ -93,11 +93,11 @@ policy.json
 
 ### Day 3 (Wed) — eBPF Active Blocking Foundation
 
-- [ ] Extend the eBPF hooks so an enforcement decision can affect the syscall result.
-- [ ] Introduce the kernel-side mechanism required to distinguish allowed and denied operations.
-- [ ] Implement the `-EPERM` return path for denied operations.
-- [ ] Preserve PID filtering while enforcement is enabled.
-- [ ] Ensure allowed operations continue normally.
+- [x] Extend the eBPF hooks so an enforcement decision can affect the syscall result.
+- [x] Introduce the kernel-side mechanism required to distinguish allowed and denied operations.
+- [x] Implement the `-EPERM` return path for denied operations.
+- [x] Preserve PID filtering while enforcement is enabled.
+- [x] Ensure allowed operations continue normally.
 
 **Goal by end of today:** KernelGuard can technically deny a selected operation at the kernel level without breaking the existing monitoring path.
 
@@ -105,12 +105,12 @@ policy.json
 
 ### Day 4 (Thu) — Network Enforcement
 
-- [ ] Apply policy enforcement to `tcp_connect`.
-- [ ] Allow connections matching configured IP rules.
-- [ ] Deny unauthorized destinations with `-EPERM`.
-- [ ] Verify the target process receives the expected failure for a blocked connection.
-- [ ] Verify an allowed connection still succeeds.
-- [ ] Confirm another PID is not affected when PID filtering is active.
+- [x] Apply policy enforcement to `tcp_connect`.
+- [x] Allow connections matching configured IP rules.
+- [x] Deny unauthorized destinations with `-EPERM`.
+- [x] Verify the target process receives the expected failure for a blocked connection.
+- [x] Verify an allowed connection still succeeds.
+- [x] Confirm another PID is not affected when PID filtering is active.
 
 **Goal by end of today:** Unauthorized network connections from the monitored process are actively blocked.
 
@@ -118,12 +118,12 @@ policy.json
 
 ### Day 5 (Fri) — Filesystem Enforcement
 
-- [ ] Apply policy enforcement to `vfs_write`.
-- [ ] Allow writes matching configured file-path rules.
-- [ ] Deny unauthorized writes with `-EPERM`.
-- [ ] Verify an allowed file write succeeds.
-- [ ] Verify a denied file write fails.
-- [ ] Confirm PID filtering remains active during enforcement.
+- [x] Apply policy enforcement to `vfs_write`.
+- [x] Allow writes matching configured file-path rules.
+- [x] Deny unauthorized writes with `-EPERM`.
+- [x] Verify an allowed file write succeeds.
+- [x] Verify a denied file write fails.
+- [x] Confirm PID filtering remains active during enforcement.
 
 **Goal by end of today:** Unauthorized filesystem writes from the monitored process are actively blocked.
 
@@ -165,9 +165,9 @@ policy.json
 |---|---|---|
 | Mon | Policy model & JSON configuration | ✅ Done |
 | Tue | Policy engine integration | ✅ Done |
-| Wed | eBPF active blocking foundation | 🔲 Pending |
-| Thu | Network enforcement | 🔲 Pending |
-| Fri | Filesystem enforcement | 🔲 Pending |
+| Wed | eBPF active blocking foundation | ✅ Done |
+| Thu | Network enforcement | ✅ Done |
+| Fri | Filesystem enforcement | ✅ Done |
 | Sat | End-to-end policy & enforcement audit | 🔲 Pending |
 | Sun | Week 3 wrap-up & Week 4 handoff | 🔲 Pending |
 

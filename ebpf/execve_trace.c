@@ -3,22 +3,17 @@
 // KernelGuard eBPF hooks for execve(), tcp_connect(), and vfs_write(),
 // plus BPF LSM enforcement hooks for network connections and file writes.
 //
-// Policy decisions are loaded from user space into BPF maps.
+// The original tracing code intentionally avoids <linux/fs.h> because
+// BCC's userspace compilation of that header is incompatible with the
+// current development kernel. The tracing compatibility structures below
+// are therefore retained.
+//
+// Active enforcement is opt-in through enforcement_enabled.
 // PID filtering is shared by monitoring and enforcement.
-//
-// Active enforcement is opt-in from the controller. When enabled:
-//   - IPv4 destinations not present in network_allowed_map are denied.
-//   - file writes to inodes not present in filesystem_allowed_map are denied.
-//   - denied operations return -EPERM from the BPF LSM hook.
-//
-// Kernel-level blocking is implemented through BPF LSM return values,
-// rather than bpf_override_return(), because LSM hooks are designed to
-// return an access-control decision directly.
 
-#include <linux/errno.h>
-#include <linux/fs.h>
 #include <linux/in.h>
 #include <linux/sched.h>
+#include <uapi/linux/errno.h>
 #include <uapi/linux/ptrace.h>
 
 BPF_ARRAY(target_pid_map, u32, 1);
@@ -40,6 +35,11 @@ struct sockaddr_in_kg {
     unsigned char pad[8];
 };
 
+/*
+ * Existing Week 2 filesystem tracing compatibility structures.
+ * These must remain because including <linux/fs.h> causes BCC header
+ * compilation failures on the current kernel.
+ */
 struct qstr {
     const unsigned char* name;
     unsigned int hash_len;
@@ -208,10 +208,10 @@ int trace_vfs_write(struct pt_regs* ctx)
 }
 
 /*
- * BPF LSM enforcement hook.
+ * BPF LSM network enforcement.
  *
- * The socket_connect LSM hook executes before the connection is
- * authorized. Returning -EPERM denies the operation.
+ * Returning 0 allows the connection.
+ * Returning -EPERM denies it.
  */
 LSM_PROBE(socket_connect,
     struct socket* sock,
@@ -251,11 +251,26 @@ LSM_PROBE(socket_connect,
 }
 
 /*
- * BPF LSM enforcement hook for file permissions.
+ * BPF LSM filesystem enforcement.
  *
- * The controller loads allowed (device, inode) pairs for the
- * configured filesystem paths. Only write access is enforced here.
+ * This first version uses a small compatibility representation of the
+ * file/inode/superblock relationship rather than including <linux/fs.h>.
+ * The actual offsets are resolved by BPF's BTF-aware CO-RE access through
+ * preserve_access_index.
  */
+struct kg_super_block {
+    dev_t s_dev;
+} __attribute__((preserve_access_index));
+
+struct kg_inode {
+    u64 i_ino;
+    struct kg_super_block* i_sb;
+} __attribute__((preserve_access_index));
+
+struct kg_file {
+    struct kg_inode* f_inode;
+} __attribute__((preserve_access_index));
+
 LSM_PROBE(file_permission,
     struct file* file,
     int mask)
@@ -270,38 +285,22 @@ LSM_PROBE(file_permission,
         return 0;
     }
 
-    struct inode* inode = NULL;
-    struct super_block* sb = NULL;
+    struct kg_file* kg_file = (struct kg_file*)file;
 
-    bpf_probe_read_kernel(
-        &inode,
-        sizeof(inode),
-        &file->f_inode);
-
-    if (inode == NULL) {
+    if (kg_file->f_inode == NULL) {
         return 0;
     }
 
-    bpf_probe_read_kernel(
-        &sb,
-        sizeof(sb),
-        &inode->i_sb);
+    struct kg_inode* inode = kg_file->f_inode;
 
-    if (sb == NULL) {
+    if (inode->i_sb == NULL) {
         return 0;
     }
 
     struct filesystem_key key = { };
 
-    bpf_probe_read_kernel(
-        &key.ino,
-        sizeof(key.ino),
-        &inode->i_ino);
-
-    bpf_probe_read_kernel(
-        &key.dev,
-        sizeof(key.dev),
-        &sb->s_dev);
+    key.ino = inode->i_ino;
+    key.dev = (u64)inode->i_sb->s_dev;
 
     if (is_filesystem_allowed(&key)) {
         return 0;

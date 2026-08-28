@@ -363,8 +363,7 @@ class ExecveController:
                 )
 
         except KeyboardInterrupt:
-            print("
-Stopped.")
+            print("\nStopped.")
 
 
 def main() -> None:

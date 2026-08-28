@@ -6,6 +6,70 @@ Format: newest entries at the top.
 
 ---
 
+## Day 5 — Friday — Filesystem Enforcement
+
+**Goal:** Apply policy enforcement to `vfs_write`, denying unauthorized writes with `-EPERM`.
+
+### Implementation
+
+- Added `file_permission` BPF LSM hook in `ebpf/execve_trace.c`.
+- The hook checks `MAY_WRITE` requests against `filesystem_allowed_map`.
+- If the target file's inode and device ID are not found in the allowed map, the hook returns `-EPERM`.
+- Added support for `--enforce` in `kernelguard.cli` to enable active blocking.
+
+### End-of-day status
+
+- [x] Apply policy enforcement to `vfs_write`.
+- [x] Deny unauthorized writes with `-EPERM`.
+- [x] Plumb `--enforce` flag through CLI to controller.
+
+**Day 5 Filesystem Enforcement complete.**
+
+---
+
+## Day 4 — Thursday — Network Enforcement
+
+**Goal:** Apply policy enforcement to `tcp_connect`, denying unauthorized destinations with `-EPERM`.
+
+### Implementation
+
+- Added `socket_connect` BPF LSM hook in `ebpf/execve_trace.c`.
+- The hook filters for `AF_INET` and evaluates the destination IP against `network_allowed_map`.
+- If the IP is not allowed, it returns `-EPERM` to actively block the connection.
+
+### End-of-day status
+
+- [x] Apply policy enforcement to `tcp_connect`.
+- [x] Allow connections matching configured IP rules.
+- [x] Deny unauthorized destinations with `-EPERM`.
+
+**Day 4 Network Enforcement complete.**
+
+---
+
+## Day 3 — Wednesday — eBPF Active Blocking Foundation
+
+**Goal:** Extend the eBPF hooks so an enforcement decision can affect the syscall result and return `-EPERM`.
+
+### Implementation
+
+- Introduced `enforcement_enabled`, `network_allowed_map`, and `filesystem_allowed_map` to `execve_trace.c`.
+- Updated Python `controller.py` to populate these maps on startup based on the parsed `policy.json`.
+- Used BPF LSM probes for active enforcement as they can return `-EPERM`, whereas standard kprobes cannot natively block operations.
+
+### Note on Filesystem Enforcement
+- `controller.py` uses `os.stat` to resolve allowed paths to their inodes. If an allowed file does not exist when KernelGuard starts, it will silently fail to be added to the allowlist, and writing to it will be blocked. The file must be created beforehand.
+
+### End-of-day status
+
+- [x] Extend the eBPF hooks so an enforcement decision can affect the syscall result.
+- [x] Introduce the kernel-side mechanism required to distinguish allowed and denied operations.
+- [x] Implement the `-EPERM` return path for denied operations.
+
+**Day 3 eBPF Active Blocking Foundation complete.**
+
+---
+
 ## Day 2 — Tuesday — eBPF Event Integration & tcp_connect Debugging
 
 **Goal:** Integrate the policy-aware eBPF tracing changes and verify that the controller can load and monitor `execve`, `tcp_connect`, and `vfs_write` events with PID filtering.
