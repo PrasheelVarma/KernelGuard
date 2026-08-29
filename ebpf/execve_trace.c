@@ -268,7 +268,8 @@ struct kg_super_block {
 };
 
 struct kg_inode {
-    char pad1[40];
+    unsigned short i_mode;
+    char pad1[38];
     struct kg_super_block* i_sb;
     char pad2[16];
     u64 i_ino;
@@ -304,7 +305,7 @@ LSM_PROBE(file_permission,
 
     // Only enforce policy on regular files to prevent blocking stdout/stderr
     unsigned short i_mode = 0;
-    bpf_probe_read_kernel(&i_mode, sizeof(i_mode), inode);
+    bpf_probe_read_kernel(&i_mode, sizeof(i_mode), &inode->i_mode);
     
     if ((i_mode & 00170000) != 0100000) { // (i_mode & S_IFMT) != S_IFREG
         return 0;

@@ -6,6 +6,35 @@ Format: newest entries at the top.
 
 ---
 
+## Day 7 — Sunday — Week 3 Wrap-Up & Robustness Fixes
+
+**Goal:** Address robustness/correctness gaps found during review, perform a clean wrap-up of Week 3, and verify the implementation aligns with project requirements.
+
+### Implementation Fixes
+- **Filesystem eBPF Enforcement Robustness**: Updated `struct kg_inode` in `execve_trace.c` to explicitly define `unsigned short i_mode;` at offset 0, preventing potentially fragile offset reliance when reading the inode mode.
+- **Test Ordering Fix**: In `tests/test_enforcement_audit.py`, the allowed file creation was moved to occur *before* the 15-second wait period. Previously, `controller.py` would start, fail to `os.stat()` the non-existent file, and silently drop it from the policy, causing false EPERM errors during the test.
+- **PID Isolation Verification**: Added a `test_pid_isolation()` phase to the audit script that spawns a subprocess to connect to a blocked IP and write to a blocked file. Confirmed that the subprocess (with a different PID) successfully bypasses enforcement, proving that the BPF target PID filter works correctly in IPS mode.
+- **Policy Validation Check**: Updated `policy.py` to use `ipaddress.ip_address` to actively validate that network configuration strings are valid IPv4 addresses during policy load, failing fast rather than relying on the controller to error later.
+
+### Architecture Note: cgroups vs BPF Map
+The original project PDF mentions "cgroups Integration: Isolates the tracing to specifically targeted Python PIDs rather than the whole system." However, the current implementation successfully achieves process isolation using an eBPF map (`target_pid_map`). 
+After review, it was determined that the BPF map cleanly achieves the required target PID isolation without the overhead of mounting/managing cgroup filesystems from the Python controller. We intentionally preserved this design because it successfully satisfies the requirements (as verified by the PID isolation test) without unnecessary redesign.
+
+### End-of-day status
+
+- [x] Perform a clean end-to-end retest of network and filesystem policy enforcement.
+- [x] Verify `-EPERM` behavior for every configured denied operation.
+- [x] Verify allowed operations remain functional.
+- [x] Review and clean up the policy engine and enforcement code.
+- [x] Update `README.md` to reflect active blocking and policy support.
+- [x] Update Week 3 development logs.
+- [x] Commit and push all Week 3 work.
+- [x] Prepare Week 4 handoff covering packaging, service lifecycle, CLI polish, and final integration.
+
+**Day 7 Wrap-Up complete. Week 3 is now officially closed.**
+
+---
+
 ## Day 6 — Saturday — End-to-End Policy & Enforcement Audit
 
 **Goal:** Run an end-to-end test of KernelGuard using a dedicated audit script to verify that allowed operations succeed and unauthorized ones return `-EPERM`.

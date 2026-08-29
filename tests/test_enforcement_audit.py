@@ -58,12 +58,6 @@ def test_filesystem() -> None:
     
     allowed_path = Path("/tmp/kernelguard-test.txt")
     denied_path = Path("/tmp/kernelguard-unauthorized.txt")
-    
-    # Pre-create the allowed file so os.stat() inside controller.py works properly
-    try:
-        allowed_path.touch()
-    except Exception:
-        pass
 
     print("Waiting a brief moment so you can confirm KernelGuard is running...")
     time.sleep(2)
@@ -87,8 +81,53 @@ def test_filesystem() -> None:
         print("✅ SUCCESS: Denied file write correctly blocked with EPERM.")
 
 
+def test_pid_isolation() -> None:
+    print("\n--- PID Isolation Audit ---")
+    print("Spawning a subprocess to test if it gets blocked (it shouldn't be)...")
+    import subprocess
+    
+    # Try connecting to denied IP in subprocess
+    network_cmd = (
+        "import socket;"
+        "s = socket.socket(socket.AF_INET, socket.SOCK_STREAM);"
+        "s.settimeout(2);"
+        "s.connect(('10.0.0.1', 80))"
+    )
+    # It might timeout or error, but shouldn't be PermissionError (EPERM)
+    proc_net = subprocess.run(
+        ["python3", "-c", network_cmd],
+        capture_output=True,
+        text=True
+    )
+    if "PermissionError" in proc_net.stderr:
+        print("❌ FAIL: Subprocess network connection was incorrectly blocked with EPERM!")
+    else:
+        print("✅ SUCCESS: Subprocess network connection was NOT blocked by EPERM.")
+
+    # Try writing to denied file in subprocess
+    file_cmd = (
+        "with open('/tmp/kernelguard-unauthorized.txt', 'a') as f:"
+        "    f.write('Subprocess write test\\n')"
+    )
+    proc_file = subprocess.run(
+        ["python3", "-c", file_cmd],
+        capture_output=True,
+        text=True
+    )
+    if "PermissionError" in proc_file.stderr:
+        print("❌ FAIL: Subprocess file write was incorrectly blocked with EPERM!")
+    else:
+        print("✅ SUCCESS: Subprocess file write was NOT blocked by EPERM.")
+
+
 def main() -> None:
     pid = os.getpid()
+
+    # Pre-create the allowed file so os.stat() inside controller.py works properly
+    try:
+        Path("/tmp/kernelguard-test.txt").touch()
+    except Exception:
+        pass
 
     print(f"TEST_PID={pid}", flush=True)
     print("Waiting 15 seconds for KernelGuard to attach...", flush=True)
@@ -102,6 +141,7 @@ def main() -> None:
 
     test_network()
     test_filesystem()
+    test_pid_isolation()
 
     print("\nEnforcement audit complete.", flush=True)
 

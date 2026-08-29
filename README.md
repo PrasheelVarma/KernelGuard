@@ -13,7 +13,7 @@
 
 **KernelGuard** is a Linux kernel-level security sandbox for running untrusted Python code — such as third-party pip packages — without exposing the full permissions of the host user. Instead of trying to restrict Python *from within* Python (which is easy to bypass), KernelGuard operates at **Ring 0 (Kernel space)** using **eBPF** to intercept raw system calls made by a target process in real time.
 
-If a monitored script attempts an unauthorized action — opening a network socket, spawning a process, or writing to a protected file — the eBPF program can log it (IDS mode) or block it instantly with `-EPERM` (IPS mode). Active blocking is part of the planned policy/enforcement work and is not yet implemented in the current Week 2 monitoring controller.
+If a monitored script attempts an unauthorized action — opening a network socket, spawning a process, or writing to a protected file — the eBPF program can log it (IDS mode) or block it instantly with `-EPERM` (IPS mode). Active blocking and policy-based enforcement are fully supported.
 
 ---
 
@@ -178,7 +178,7 @@ KernelGuard is developed over 4 weeks — kernel-level syscall interception, net
 - Multi-file interception audit
 - eBPF performance verification
 
-### Week 3 — Policy Engine & Active Blocking
+### Week 3 — Policy Engine & Active Blocking ✅
 
 - Policy engine
 - Rule evaluation

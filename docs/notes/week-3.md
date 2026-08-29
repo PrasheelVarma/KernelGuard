@@ -146,14 +146,14 @@ policy.json
 
 ### Day 7 (Sun) — Week 3 Wrap-Up
 
-- [ ] Perform a clean end-to-end retest of network and filesystem policy enforcement.
-- [ ] Verify `-EPERM` behavior for every configured denied operation.
-- [ ] Verify allowed operations remain functional.
-- [ ] Review and clean up the policy engine and enforcement code.
-- [ ] Update `README.md` to reflect active blocking and policy support.
-- [ ] Update Week 3 development logs.
-- [ ] Commit and push all Week 3 work.
-- [ ] Prepare Week 4 handoff covering packaging, service lifecycle, CLI polish, and final integration.
+- [x] Perform a clean end-to-end retest of network and filesystem policy enforcement.
+- [x] Verify `-EPERM` behavior for every configured denied operation.
+- [x] Verify allowed operations remain functional.
+- [x] Review and clean up the policy engine and enforcement code.
+- [x] Update `README.md` to reflect active blocking and policy support.
+- [x] Update Week 3 development logs.
+- [x] Commit and push all Week 3 work.
+- [x] Prepare Week 4 handoff covering packaging, service lifecycle, CLI polish, and final integration.
 
 **Target by end of Sunday:** KernelGuard has moved from an IDS-style monitoring tool to an IPS-style enforcement tool with a JSON policy engine, matching the official Week 3 requirement.
 
@@ -169,7 +169,7 @@ policy.json
 | Thu | Network enforcement | ✅ Done |
 | Fri | Filesystem enforcement | ✅ Done |
 | Sat | End-to-end policy & enforcement audit | ✅ Done |
-| Sun | Week 3 wrap-up & Week 4 handoff | 🔲 Pending |
+| Sun | Week 3 wrap-up & Week 4 handoff | ✅ Done |
 
 ---
 

@@ -5,6 +5,7 @@ Loads a JSON policy and evaluates whether network destinations
 and filesystem paths are allowed.
 """
 
+import ipaddress
 import json
 from pathlib import Path
 from typing import Any
@@ -86,10 +87,21 @@ class Policy:
                 "'filesystem.allowed_paths' must be a JSON array."
             )
 
-        if not all(isinstance(ip, str) for ip in allowed_ips):
-            raise PolicyValidationError(
-                "Every value in 'network.allowed_ips' must be a string."
-            )
+        for ip in allowed_ips:
+            if not isinstance(ip, str):
+                raise PolicyValidationError(
+                    "Every value in 'network.allowed_ips' must be a string."
+                )
+            try:
+                addr = ipaddress.ip_address(ip)
+                if addr.version != 4:
+                    raise PolicyValidationError(
+                        f"Only IPv4 policy entries are supported: {ip}"
+                    )
+            except ValueError:
+                raise PolicyValidationError(
+                    f"Invalid IP address format: {ip}"
+                )
 
         if not all(isinstance(path, str) for path in allowed_paths):
             raise PolicyValidationError(
