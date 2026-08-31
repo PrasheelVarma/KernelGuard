@@ -22,6 +22,7 @@ from pathlib import Path
 
 from bcc import BPF
 
+from .logger import KernelGuardLogger
 from .policy import Policy, PolicyError
 
 
@@ -57,6 +58,7 @@ class ExecveController:
         enforce: bool = False,
         source_path: Path = EBPF_SOURCE_PATH,
         policy_path: Path = DEFAULT_POLICY_PATH,
+        logger: KernelGuardLogger | None = None,
     ):
         if target_pid < 0:
             raise ValueError("target_pid must be 0 or a positive PID")
@@ -65,6 +67,7 @@ class ExecveController:
         self.enforce = enforce
         self.source_path = source_path
         self.policy_path = policy_path
+        self.logger = logger or KernelGuardLogger()
         self.bpf = None
         self.policy = None
 
@@ -320,50 +323,37 @@ class ExecveController:
                 "decision": decision,
             }
 
-    def run(self) -> None:
+    def run(self, daemon: bool = False) -> None:
         """Load the program and print policy-aware events until interrupted."""
         try:
             self.load()
         except ControllerError as exc:
-            print(f"Error: {exc}", file=sys.stderr)
+            self.logger.error(str(exc))
             sys.exit(1)
 
         scope = (
             f"PID {self.target_pid}"
             if self.target_pid
-            else "all processes"
+            else "All System Processes"
         )
 
-        mode = "ENFORCEMENT ENABLED" if self.enforce else "MONITORING ONLY"
+        mode = "ENFORCEMENT ENABLED (-EPERM)" if self.enforce else "MONITORING ONLY"
 
-        print(
-            "Monitoring execve, tcp_connect, and vfs_write events "
-            f"for {scope}."
+        self.logger.banner(
+            scope=scope,
+            policy_path=str(self.policy_path),
+            mode=mode,
+            daemon=daemon,
         )
-        print(f"Policy: {self.policy_path}")
-        print(f"Mode: {mode}")
 
-        print(
-            f"{'PID':<8} "
-            f"{'TASK':<16} "
-            f"{'EVENT TYPE':<16} "
-            f"{'DECISION':<10} "
-            "DETAIL"
-        )
-        print("-" * 100)
+        self.logger.table_header()
 
         try:
             for event in self.events():
-                print(
-                    f"{event['pid']:<8} "
-                    f"{event['task']:<16} "
-                    f"{event['event_type']:<16} "
-                    f"{event['decision']:<10} "
-                    f"{event['detail']}"
-                )
+                self.logger.log_event(event)
 
         except KeyboardInterrupt:
-            print("\nStopped.")
+            self.logger.info("\nStopping KernelGuard...")
 
 
 def main() -> None:

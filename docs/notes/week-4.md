@@ -44,9 +44,9 @@ The goal is to ensure KernelGuard can run robustly in the background, report sec
 
 ### Day 1 (Mon) — CLI Refinement & Colored Alerts
 
-- [ ] Refactor the CLI using `argparse` to support advanced flags (e.g., daemon mode).
-- [ ] Implement colored logging/alerts (using ANSI escape codes or libraries like `rich`/`colorama`).
-- [ ] Ensure clear, distinct visual alerts are presented when an untrusted script is actively blocked.
+- [x] Refactor the CLI using `argparse` to support advanced flags (e.g., daemon mode).
+- [x] Implement colored logging/alerts (using ANSI escape codes or libraries like `rich`/`colorama`).
+- [x] Ensure clear, distinct visual alerts are presented when an untrusted script is actively blocked.
 
 **Primary files:**
 ```text
@@ -123,7 +123,7 @@ kernelguard/logger.py
 
 | Day | Focus | Status |
 |---|---|---|
-| Mon | CLI refinement & colored alerts | [ ] Pending |
+| Mon | CLI refinement & colored alerts | ✅ Done |
 | Tue | Graceful cleanup & hook detachment | [ ] Pending |
 | Wed | systemd service integration | [ ] Pending |
 | Thu | Packaging | [ ] Pending |
