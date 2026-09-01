@@ -60,9 +60,9 @@ kernelguard/logger.py
 
 ### Day 2 (Tue) — Graceful Cleanup & Hook Detachment
 
-- [ ] Implement robust signal handling (`SIGINT`, `SIGTERM`) in the Python controller.
-- [ ] Ensure that all eBPF hooks are properly detached from the kernel on exit.
-- [ ] Ensure BPF maps and other kernel resources are cleanly deallocated.
+- [x] Implement robust signal handling (`SIGINT`, `SIGTERM`) in the Python controller.
+- [x] Ensure that all eBPF hooks are properly detached from the kernel on exit.
+- [x] Ensure BPF maps and other kernel resources are cleanly deallocated.
 
 **Goal by end of today:** Stopping KernelGuard guarantees that the system returns to its original state without leaving orphaned eBPF programs running.
 
@@ -124,7 +124,7 @@ kernelguard/logger.py
 | Day | Focus | Status |
 |---|---|---|
 | Mon | CLI refinement & colored alerts | ✅ Done |
-| Tue | Graceful cleanup & hook detachment | [ ] Pending |
+| Tue | Graceful cleanup & hook detachment | ✅ Done |
 | Wed | systemd service integration | [ ] Pending |
 | Thu | Packaging | [ ] Pending |
 | Fri | Final integration testing | [ ] Pending |

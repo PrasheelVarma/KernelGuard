@@ -6,6 +6,49 @@ Format: newest entries at the top.
 
 ---
 
+## Day 2 — Tuesday — Graceful Cleanup & Hook Detachment
+
+**Goal:** Implement robust signal handling (`SIGINT`, `SIGTERM`) and explicit eBPF hook detachment / kernel resource deallocation to guarantee that stopping the service or process returns the Linux kernel to its original state without leaving orphaned eBPF programs or maps.
+
+### Implementation
+
+- **`kernelguard/controller.py`**:
+  - Implemented `setup_signal_handlers()` to register graceful shutdown hooks for `SIGINT` and `SIGTERM`.
+  - Added `self.attached_kprobes` to actively track attached BPF probes.
+  - Implemented `cleanup()` method to explicitly detach tracked kprobes and call `bpf.cleanup()` to release resources.
+  - Added Python context manager protocol (`__enter__` and `__exit__`) for predictable resource management.
+  - Wrapped `events()` and `run()` logic with `try...finally` to ensure guaranteed execution of `cleanup()`.
+
+- **`kernelguard/cli.py`**:
+  - Registered `remove_pid_file` via `atexit.register()` inside `daemonize()` to reliably delete `/tmp/kernelguard.pid` when the daemon exits.
+
+- **`tests/test_cleanup.py`**:
+  - Authored a comprehensive new unit test suite using `unittest` and `unittest.mock`.
+  - Verified controller state tracking, successful signal handler mapping, robust kprobe detachment, and proper exception handling during cleanup.
+  
+- **`tests/__init__.py`**:
+  - Corrected a syntax error preventing unit test discovery by converting `.gitkeep` text to a Python docstring.
+
+### Features Added
+
+1. **Robust Signal Handling**: The daemon now safely catches termination signals (e.g. from `systemctl stop` or Ctrl+C) and stops gracefully instead of crashing abruptly.
+2. **Deterministic Resource Deallocation**: All active kprobes (`execve`, `tcp_connect`, `vfs_write`) are explicitly detached and BPF maps are freed during shutdown, eliminating orphaned hooks.
+3. **Clean Daemon Exit**: The PID file is cleaned up automatically, simplifying system integration and service restart logic.
+
+### Verification
+
+- Verified test execution using `python3 -m unittest tests/test_cleanup.py` (6 unit tests passing).
+- Verified proper teardown sequences when raising `KeyboardInterrupt` inside the event loop.
+- Verified `week-4.md` tracking checklist updated for Day 2 completion.
+
+### End-of-day status
+
+- [x] Implement robust signal handling (`SIGINT`, `SIGTERM`) in the Python controller.
+- [x] Ensure that all eBPF hooks are properly detached from the kernel on exit.
+- [x] Ensure BPF maps and other kernel resources are cleanly deallocated.
+
+**Day 2 Graceful Cleanup & Hook Detachment complete.**
+
 ## Day 1 — Monday — CLI Refinement & Colored Alerts
 
 **Goal:** Refactor the command-line interface with advanced argument parsing, implement colored terminal logging with zero external dependencies, and produce clear, distinct visual security alerts when operations are blocked by policy.

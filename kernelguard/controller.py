@@ -17,6 +17,7 @@ unless the CLI is started with --enforce.
 import ctypes as ct
 import ipaddress
 import os
+import signal
 import sys
 from pathlib import Path
 
@@ -70,6 +71,8 @@ class ExecveController:
         self.logger = logger or KernelGuardLogger()
         self.bpf = None
         self.policy = None
+        self.attached_kprobes: list[str] = []
+        self.running = False
 
     def _check_privileges(self) -> None:
         if os.geteuid() != 0:
@@ -194,22 +197,29 @@ class ExecveController:
         try:
             self._configure_policy_maps()
 
+            self.attached_kprobes = []
+
+            execve_fn = self.bpf.get_syscall_fnname("execve")
             self.bpf.attach_kprobe(
-                event=self.bpf.get_syscall_fnname("execve"),
+                event=execve_fn,
                 fn_name="trace_execve",
             )
+            self.attached_kprobes.append(execve_fn)
 
             self.bpf.attach_kprobe(
                 event="tcp_connect",
                 fn_name="trace_tcp_connect",
             )
+            self.attached_kprobes.append("tcp_connect")
 
             self.bpf.attach_kprobe(
                 event="vfs_write",
                 fn_name="trace_vfs_write",
             )
+            self.attached_kprobes.append("vfs_write")
 
         except Exception as exc:
+            self.cleanup()
             raise BPFLoadError(
                 f"Failed to configure or attach eBPF enforcement/tracing hooks: {exc}"
             ) from exc
@@ -293,6 +303,55 @@ class ExecveController:
 
         return "MONITOR"
 
+    def setup_signal_handlers(self) -> None:
+        """Register signal handlers for SIGINT and SIGTERM for graceful shutdown."""
+        def _signal_handler(signum, frame):
+            sig_name = (
+                signal.Signals(signum).name
+                if hasattr(signal, "Signals")
+                else str(signum)
+            )
+            self.logger.info(
+                f"Received signal {sig_name} ({signum}). Initiating graceful shutdown..."
+            )
+            self.running = False
+
+        try:
+            signal.signal(signal.SIGINT, _signal_handler)
+            signal.signal(signal.SIGTERM, _signal_handler)
+        except (ValueError, OSError):
+            # Signal handling can only be set from the main thread
+            pass
+
+    def cleanup(self) -> None:
+        """Gracefully detach eBPF hooks and clean up kernel resources."""
+        if self.bpf is not None:
+            self.logger.info("Cleaning up eBPF hooks and kernel resources...")
+
+            for event in list(self.attached_kprobes):
+                try:
+                    self.bpf.detach_kprobe(event=event)
+                except Exception as exc:
+                    self.logger.warning(
+                        f"Failed to detach kprobe '{event}': {exc}"
+                    )
+            self.attached_kprobes.clear()
+
+            try:
+                self.bpf.cleanup()
+            except Exception as exc:
+                self.logger.warning(f"Error during BPF cleanup: {exc}")
+
+            self.bpf = None
+            self.logger.info("KernelGuard cleanup completed successfully.")
+
+    def __enter__(self):
+        self.load()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
+
     def events(self):
         """Yield normalized events with controller-side policy decisions."""
         if self.bpf is None:
@@ -300,11 +359,22 @@ class ExecveController:
                 "BPF program not loaded. Call load() first."
             )
 
-        while True:
+        self.running = True
+        while self.running:
             try:
                 task, pid, cpu, flags, ts, msg = self.bpf.trace_fields()
             except ValueError:
                 continue
+            except (KeyboardInterrupt, SystemExit):
+                self.running = False
+                break
+            except Exception:
+                if not self.running:
+                    break
+                continue
+
+            if not self.running:
+                break
 
             task_name = task.decode(errors="replace")
             message = msg.decode(errors="replace")
@@ -331,6 +401,8 @@ class ExecveController:
             self.logger.error(str(exc))
             sys.exit(1)
 
+        self.setup_signal_handlers()
+
         scope = (
             f"PID {self.target_pid}"
             if self.target_pid
@@ -354,6 +426,8 @@ class ExecveController:
 
         except KeyboardInterrupt:
             self.logger.info("\nStopping KernelGuard...")
+        finally:
+            self.cleanup()
 
 
 def main() -> None:

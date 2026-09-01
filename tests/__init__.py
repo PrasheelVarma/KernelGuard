@@ -1,1 +1,1 @@
-.gitkeep
+"""Test package for KernelGuard."""

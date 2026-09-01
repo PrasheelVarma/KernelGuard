@@ -42,6 +42,16 @@ def daemonize(pid_file: str = "/tmp/kernelguard.pid", log_file: str = "/tmp/kern
     with open(pid_file, "w", encoding="utf-8") as pfile:
         pfile.write(str(os.getpid()))
 
+    def remove_pid_file() -> None:
+        try:
+            if os.path.exists(pid_file):
+                os.remove(pid_file)
+        except OSError:
+            pass
+
+    import atexit
+    atexit.register(remove_pid_file)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
