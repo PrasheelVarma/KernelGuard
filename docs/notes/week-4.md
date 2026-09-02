@@ -70,9 +70,9 @@ kernelguard/logger.py
 
 ### Day 3 (Wed) — systemd Service Integration
 
-- [ ] Create a `kernelguard.service` systemd unit file.
-- [ ] Configure the service to start the Python daemon correctly with necessary capabilities/privileges.
-- [ ] Ensure systemd can gracefully stop the service using the signal handlers built on Day 2.
+- [x] Create a `kernelguard.service` systemd unit file.
+- [x] Configure the service to start the Python daemon correctly with necessary capabilities/privileges.
+- [x] Ensure systemd can gracefully stop the service using the signal handlers built on Day 2.
 
 **Goal by end of today:** KernelGuard can be managed natively via `systemctl start/stop/status kernelguard`.
 
@@ -125,7 +125,7 @@ kernelguard/logger.py
 |---|---|---|
 | Mon | CLI refinement & colored alerts | ✅ Done |
 | Tue | Graceful cleanup & hook detachment | ✅ Done |
-| Wed | systemd service integration | [ ] Pending |
+| Wed | systemd service integration | ✅ Done |
 | Thu | Packaging | [ ] Pending |
 | Fri | Final integration testing | [ ] Pending |
 | Sat | Final documentation & polish | [ ] Pending |

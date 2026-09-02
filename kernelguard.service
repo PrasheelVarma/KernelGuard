@@ -1,0 +1,15 @@
+[Unit]
+Description=KernelGuard eBPF Security Monitor
+After=network.target
+
+[Service]
+Type=forking
+PIDFile=/tmp/kernelguard.pid
+ExecStart=/usr/bin/env python3 -m kernelguard.cli --daemon --enforce
+ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=10
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target

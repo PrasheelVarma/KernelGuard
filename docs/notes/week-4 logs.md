@@ -6,6 +6,40 @@ Format: newest entries at the top.
 
 ---
 
+## Day 3 — Wednesday — systemd Service Integration
+
+**Goal:** Create a systemd unit file to natively manage the KernelGuard daemon, ensuring proper capability configuration and graceful shutdown using the signal handlers built on Day 2.
+
+### Implementation
+
+- **`kernelguard.service`**:
+  - Created a systemd unit file using `Type=forking` to support the `--daemon` mode developed on Day 1.
+  - Specified `PIDFile=/tmp/kernelguard.pid` to allow systemd to accurately track the background process.
+  - Set `ExecStart` to execute the Python CLI with `--daemon` and `--enforce` flags via `python3 -m kernelguard.cli`.
+  - Configured to run as `User=root` to provide the necessary privileges for eBPF operations.
+  - Ensured systemd's default `SIGTERM` behavior is used to leverage the graceful hook detachment implemented on Day 2.
+
+### Features Added
+
+1. **Native Service Management**: KernelGuard can now be started, stopped, and monitored using standard `systemctl` commands.
+2. **Proper Daemon Tracking**: Full integration with the daemon's PID file generation for reliable state management.
+3. **Graceful Systemd Shutdown**: Hooked systemd's termination signal into the controller's existing cleanup sequence.
+
+### Verification
+
+- Verified the `kernelguard.service` file syntax and structure.
+- Updated the `week-4.md` tracking checklist for Day 3 completion.
+
+### End-of-day status
+
+- [x] Create a `kernelguard.service` systemd unit file.
+- [x] Configure the service to start the Python daemon correctly with necessary capabilities/privileges.
+- [x] Ensure systemd can gracefully stop the service using the signal handlers built on Day 2.
+
+**Day 3 systemd Service Integration complete.**
+
+---
+
 ## Day 2 — Tuesday — Graceful Cleanup & Hook Detachment
 
 **Goal:** Implement robust signal handling (`SIGINT`, `SIGTERM`) and explicit eBPF hook detachment / kernel resource deallocation to guarantee that stopping the service or process returns the Linux kernel to its original state without leaving orphaned eBPF programs or maps.
