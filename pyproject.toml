@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kernelguard"
+version = "1.0.0"
+description = "A highly advanced security sandbox operating at the Linux Kernel level"
+authors = [
+    {name = "KernelGuard Team"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "bcc",
+    "colorama"
+]
+
+[project.scripts]
+kernelguard = "kernelguard.cli:main"

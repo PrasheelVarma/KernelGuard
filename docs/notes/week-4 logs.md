@@ -6,6 +6,42 @@ Format: newest entries at the top.
 
 ---
 
+## Day 4 — Thursday — Packaging
+
+**Goal:** Package the Python modules and C eBPF source files to enable standard installation and native systemd integration.
+
+### Implementation
+
+- **`pyproject.toml` & `setup.py`**:
+  - Authored standard Python packaging configuration using `setuptools`.
+  - Defined the `kernelguard` CLI entry point.
+  - Specified package metadata and dependencies (`bcc`, `colorama`).
+- **`MANIFEST.in`**:
+  - Included the necessary C eBPF source files (`ebpf/execve_trace.c`) so they are packaged along with the Python code.
+- **`Makefile`**:
+  - Created a simple Makefile with `install` and `uninstall` targets.
+  - Configured it to install the Python package, deploy `kernelguard.service` to `/etc/systemd/system/`, and reload the systemd daemon.
+
+### Features Added
+
+1. **Standard Packaging**: KernelGuard can now be installed like any standard Python tool (`pip install .` or `make install`).
+2. **Easy Deployment**: The `Makefile` simplifies the deployment of the Python code alongside the systemd service file.
+
+### Verification
+
+- Verified the presence and structure of `pyproject.toml`, `setup.py`, `MANIFEST.in`, and `Makefile`.
+- Updated the `week-4.md` tracking checklist for Day 4 completion.
+
+### End-of-day status
+
+- [x] Create `setup.py` or `pyproject.toml` to package the Python modules.
+- [x] Ensure the C eBPF source files are correctly included in the package.
+- [x] Provide an installation script or makefile to place the systemd service file in the correct system directory.
+
+**Day 4 Packaging complete.**
+
+---
+
 ## Day 3 — Wednesday — systemd Service Integration
 
 **Goal:** Create a systemd unit file to natively manage the KernelGuard daemon, ensuring proper capability configuration and graceful shutdown using the signal handlers built on Day 2.
