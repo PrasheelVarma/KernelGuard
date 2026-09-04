@@ -1,6 +1,6 @@
 # KernelGuard 🛡️
 
-**eBPF-Powered Runtime Security Sandbox for Untrusted Python Code**
+**eBPF-based runtime security sandbox for untrusted Python processes**
 
 [![Status](https://img.shields.io/badge/status-in%20development-yellow)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
@@ -11,21 +11,42 @@
 
 ## 📌 Overview
 
-**KernelGuard** is a Linux kernel-level security sandbox for running untrusted Python code — such as third-party pip packages — without exposing the full permissions of the host user. Instead of trying to restrict Python *from within* Python (which is easy to bypass), KernelGuard operates at **Ring 0 (Kernel space)** using **eBPF** to intercept raw system calls made by a target process in real time.
+**KernelGuard** is a Linux security sandbox for monitoring and controlling selected activity from a target Python process.
 
-If a monitored script attempts an unauthorized action — opening a network socket, spawning a process, or writing to a protected file — the eBPF program can log it (IDS mode) or block it instantly with `-EPERM` (IPS mode). Active blocking and policy-based enforcement are fully supported.
+It uses **eBPF** programs loaded into the Linux kernel to observe process execution, network connections, and filesystem activity. A Python controller manages the eBPF programs and applies the configured policy.
+
+KernelGuard supports two main modes:
+
+- **Monitoring:** observe and log supported activity.
+- **Enforcement:** apply policy rules and return `-EPERM` for unauthorized operations.
+
+The project is currently under development and is being tested and refined as the implementation progresses.
 
 ---
 
 ## 🎯 Problem Statement
 
-Untrusted Python code — like a downloaded pip package — runs with the full permissions of the user who executes it. If a malicious script attempts to open an unauthorized reverse shell or encrypt files (ransomware-style behavior), standard Python-level sandboxes (e.g., Docker containers, `pysandbox`) are either too heavy to spin up for lightweight checks or too easily bypassed since they operate at the same privilege level as the code they're trying to restrict.
+Python code from untrusted sources, such as third-party packages or downloaded scripts, normally runs with the permissions available to the process that executes it.
+
+A program with those permissions may be able to access the network, start other processes, or write to files that it should not modify.
+
+KernelGuard explores a lightweight kernel-level approach where selected activity from a target process can be observed and, when enforcement is enabled, restricted according to a policy.
+
+---
 
 ## 💡 The Approach
 
-KernelGuard uses Python's **`bcc`** (BPF Compiler Collection) library to write and load eBPF programs directly into the Linux kernel. These programs hook into low-level system calls — `execve`, `tcp_connect`, `vfs_write` — made by a *specifically targeted* Python process through PID filtering, not the whole system.
+KernelGuard uses Python's **`bcc`** (BPF Compiler Collection) library to load and manage eBPF programs in the Linux kernel.
 
-Because the enforcement happens in kernel space, it is invisible to and independent of the sandboxed script itself — the target process has no way to detect or disable the monitoring from user space.
+The current implementation uses eBPF hooks for:
+
+- `execve` for process execution
+- `tcp_connect` for network connections
+- `vfs_write` for filesystem writes
+
+A BPF map is used to provide target-process filtering. When a target PID is specified, the enforcement and monitoring logic can be limited to that process.
+
+The enforcement system can use policy data to allow or deny supported operations. Unauthorized operations can be rejected with `-EPERM`.
 
 ---
 
@@ -33,34 +54,49 @@ Because the enforcement happens in kernel space, it is invisible to and independ
 
 | Module | Description |
 |---|---|
-| **eBPF C-Code** | Low-level C programs loaded into the Linux kernel to hook `execve`, `tcp_connect`, and `vfs_write`. |
-| **Python BPF Controller (`bcc`)** | Loads and manages all eBPF hooks, applies target-PID filtering through a BPF map, and provides unified event output. |
-| **PID Filtering** | Restricts monitoring to a specific target process using a PID supplied through the CLI. |
-| **Security CLI** | Command-line entry point for starting KernelGuard with an optional target PID, e.g. `sudo python3 -m kernelguard.cli --pid <PID>`. |
+| **eBPF C-Code** | Kernel-side eBPF programs used for process, network, and filesystem monitoring and enforcement. |
+| **Python BPF Controller (`bcc`)** | Loads and manages the eBPF programs, configures BPF maps, applies policy data, and handles events. |
+| **PID Filtering** | Provides process-level targeting through a PID supplied to the CLI. |
+| **Policy Engine** | Loads policy rules and prepares the corresponding allowlists and enforcement state. |
+| **Security CLI** | Command-line entry point for starting KernelGuard with monitoring, enforcement, policy, and target-PID options. |
 
 ---
 
 ## 🏗️ Architecture
 
 ```text
-┌─────────────────────┐        loads/compiles        ┌──────────────────────┐
-│   Security CLI       │ ───────────────────────────▶ │  Python BPF Controller│
-│  (argparse / Typer)  │                               │        (bcc)          │
-└─────────────────────┘                               └──────────┬────────────┘
-                                                                    │ injects
-                                                                    ▼
-                                                       ┌──────────────────────┐
-                                                       │     eBPF Program      │
-                                                       │  (Kernel Space / C)   │
-                                                       └──────────┬────────────┘
-                                                                    │ hooks
-                          ┌─────────────────────────────────────────┴─────────────────────────────┐
-                          ▼                          ▼                          ▼
-                     execve()                  tcp_connect()               vfs_write()
-                (process spawn)              (network access)           (file system write)
-                          │                          │                          │
-                          └──────────────► log intercepted events ◄──────────────┘
-                                           targeted at monitored PID
+┌─────────────────────┐
+│    Security CLI     │
+│      argparse       │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────────┐
+│  Python BPF Controller  │
+│          (bcc)          │
+└──────────┬──────────────┘
+           │ loads / configures
+           ▼
+┌─────────────────────────┐
+│       eBPF Programs     │
+│    Linux Kernel Space   │
+└──────────┬──────────────┘
+           │
+     ┌─────┼──────────┐
+     ▼     ▼          ▼
+  execve  tcp_connect  vfs_write
+     │     │          │
+     └─────┼──────────┘
+           ▼
+     Event / Policy
+       Processing
+           │
+      ┌────┴────┐
+      ▼         ▼
+   Monitor   Enforce
+               │
+               ▼
+             -EPERM
 ```
 
 ---
@@ -69,16 +105,17 @@ Because the enforcement happens in kernel space, it is invisible to and independ
 
 - **Kernel Layer:** eBPF, C
 - **Controller Layer:** Python 3, `bcc`
-- **Process Isolation:** Linux PID filtering through a BPF map
+- **Process Targeting:** Linux PID filtering through a BPF map
+- **Policy:** JSON policy configuration and Python policy handling
 - **CLI:** `argparse`
-- **Output/Alerts:** Unified terminal event output
-- **Packaging:** Planned for later project stages
+- **Output:** Terminal event and security logging
+- **Packaging:** Python package with a dedicated virtual environment
 
 ---
 
 ## 🚀 Getting Started
 
-> ⚠️ Requires a Linux environment with kernel headers and BCC installed, matching your exact running kernel (`uname -r`). eBPF program loading requires root privileges.
+> ⚠️ KernelGuard requires a Linux environment with the required kernel support and BCC installation. Loading eBPF programs and enabling enforcement requires elevated privileges.
 
 ### Prerequisites
 
@@ -93,7 +130,8 @@ sudo apt update
 sudo apt install -y bpfcc-tools python3-bpfcc linux-headers-$(uname -r)
 ```
 
-Verify the install:
+Verify the BCC installation:
+
 ```bash
 sudo python3 -c "from bcc import BPF; print('BCC import OK')"
 ```
@@ -110,7 +148,7 @@ pip install -r requirements.txt
 
 ### Usage
 
-Monitor all supported events:
+Monitor supported events:
 
 ```bash
 sudo python3 -m kernelguard.cli
@@ -122,35 +160,54 @@ Monitor a specific target process:
 sudo python3 -m kernelguard.cli --pid <PID>
 ```
 
-The current controller monitors:
+Enable enforcement for a target process:
+
+```bash
+sudo python3 -m kernelguard.cli --pid <PID> --enforce
+```
+
+Use a specific policy:
+
+```bash
+sudo python3 -m kernelguard.cli --pid <PID> --enforce --policy policy.json
+```
+
+KernelGuard currently monitors and handles:
 
 - `execve`
 - `tcp_connect`
 - `vfs_write`
 
-and applies the optional PID filter through the eBPF `target_pid_map`.
+Target-process filtering is provided through the eBPF `target_pid_map`.
+
+> **Development note:** Active enforcement can affect real system operations depending on the target scope and policy. Review the policy and target PID before enabling enforcement.
 
 ---
 
 ## 📂 Project Structure
 
 ```text
-kernelguard/
+KernelGuard/
 ├── ebpf/
-│   └── execve_trace.c        # eBPF hooks: execve, tcp_connect, vfs_write
+│   └── execve_trace.c        # eBPF hooks and kernel-side logic
 ├── kernelguard/
 │   ├── __init__.py
-│   ├── controller.py         # BCC loader, PID filtering, unified event handling
-│   ├── policy.py             # Policy engine (Week 3)
-│   └── cli.py                # CLI entrypoint
+│   ├── controller.py         # BCC loader, policy setup, PID filtering, event handling
+│   ├── policy.py             # Policy engine
+│   ├── cli.py                # CLI entrypoint and daemon handling
+│   └── logger.py             # Logging and terminal output
 ├── tests/
 │   ├── test_controller.py
 │   ├── test_interception_audit.py
 │   └── test_performance.py
 ├── docs/
-│   ├── week-2.md             # Week 2 implementation plan
-│   └── week-2 logs.md        # Week 2 development log
+│   ├── week-2.md             # Development plan
+│   └── week-2 logs.md        # Development log
+├── policy.json
 ├── requirements.txt
+├── Makefile
+├── pyproject.toml
+├── setup.py
 ├── README.md
 └── LICENSE
 ```
@@ -159,7 +216,7 @@ kernelguard/
 
 ## 🗺️ Roadmap
 
-KernelGuard is developed over 4 weeks — kernel-level syscall interception, network/filesystem hooking, active blocking/policy enforcement, then packaging and polish.
+KernelGuard is being developed over 4 weeks, covering kernel-level event interception, network and filesystem monitoring, policy-based enforcement, packaging, testing, and project cleanup.
 
 ### Week 1 — Foundation
 
@@ -192,16 +249,20 @@ KernelGuard is developed over 4 weeks — kernel-level syscall interception, net
 - Documentation
 - Testing and project cleanup
 
-For detailed day-by-day development progress, see the Week 2 plan and development logs.
+The Week 4 work is still in progress. The roadmap will be updated after the planned implementation is completed.
+
+For detailed development progress, implementation notes, and logs, see the documentation in the `docs/` directory.
 
 ---
 
 ## 🔒 Security Note
 
-This tool interacts directly with the Linux kernel and requires elevated privileges to load eBPF programs. It is intended for controlled sandboxing/research use — always review policies before running untrusted code, and test in an isolated VM before deploying against real workloads.
+KernelGuard loads eBPF programs into the Linux kernel and requires elevated privileges for active enforcement.
+
+This project is currently under development and should only be used for controlled testing. Review the policy and target scope before enabling enforcement, especially when running KernelGuard directly on a host system.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
