@@ -21,6 +21,7 @@
 #endif
 
 BPF_ARRAY(target_pid_map, u32, 1);
+BPF_ARRAY(exempt_pid_map, u32, 1);
 BPF_ARRAY(enforcement_enabled, u32, 1);
 
 BPF_HASH(network_allowed_map, u32, u8, 256);
@@ -66,8 +67,23 @@ struct dentry {
     struct qstr d_name;
 };
 
+static int is_exempt_pid(u32 pid)
+{
+    int key = 0;
+    u32* exempt_pid = exempt_pid_map.lookup(&key);
+    
+    if (exempt_pid != NULL && *exempt_pid != 0 && *exempt_pid == pid) {
+        return 1;
+    }
+    return 0;
+}
+
 static int is_target_pid(u32 pid)
 {
+    if (is_exempt_pid(pid)) {
+        return 0;
+    }
+
     int key = 0;
     u32* target_pid = target_pid_map.lookup(&key);
 
@@ -211,12 +227,6 @@ int trace_vfs_write(struct pt_regs* ctx)
     return 0;
 }
 
-/*
- * BPF LSM network enforcement.
- *
- * Returning 0 allows the connection.
- * Returning -EPERM denies it.
- */
 LSM_PROBE(socket_connect,
     struct socket* sock,
     struct sockaddr* address,
@@ -228,7 +238,7 @@ LSM_PROBE(socket_connect,
         return 0;
     }
 
-    if (address == NULL || addrlen < sizeof(struct sockaddr_in_kg)) {
+    if (address == NULL) {
         return 0;
     }
 
@@ -238,6 +248,8 @@ LSM_PROBE(socket_connect,
         &addr,
         sizeof(addr),
         address);
+        
+    bpf_trace_printk("socket_connect pid=%d family=%d len=%d\n", pid, addr.sin_family, addrlen);
 
     if (addr.sin_family != AF_INET) {
         return 0;

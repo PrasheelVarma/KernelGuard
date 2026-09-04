@@ -101,6 +101,15 @@ class ExecveController:
         key = target_pid_map.Key(0)
         value = target_pid_map.Leaf(self.target_pid)
         target_pid_map[key] = value
+        
+        # Exempt the daemon itself from its own enforcement
+        try:
+            exempt_pid_map = self.bpf["exempt_pid_map"]
+            exempt_key = exempt_pid_map.Key(0)
+            exempt_value = exempt_pid_map.Leaf(os.getpid())
+            exempt_pid_map[exempt_key] = exempt_value
+        except KeyError:
+            pass
 
     def _configure_enforcement(self) -> None:
         """Enable or disable kernel-side enforcement in the eBPF program."""

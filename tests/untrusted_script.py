@@ -18,9 +18,9 @@ except Exception as e:
     print(f"[!] Other exception: {e}")
 
 # Test 2: Filesystem violation
-print("[*] Attempting unauthorized file write to /etc/passwd...")
+print("[*] Attempting unauthorized file write to /tmp/unauthorized_write.txt...")
 try:
-    with open("/etc/passwd", "a") as f:
+    with open("/tmp/unauthorized_write.txt", "a") as f:
         f.write("\n# KernelGuard test")
     print("[!] FATAL: File write succeeded! (Should have been blocked)")
 except PermissionError:
