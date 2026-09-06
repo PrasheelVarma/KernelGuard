@@ -62,7 +62,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--pid",
         type=int,
         default=0,
-        help="Target process ID to monitor/enforce (default: 0 for all processes).",
+        help=(
+    "Target process ID to monitor/enforce "
+    "(default: 0 for all processes; use a specific PID for enforcement testing)."
+),
     )
 
     parser.add_argument(
