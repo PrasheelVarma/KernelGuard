@@ -32,6 +32,7 @@ EBPF_SOURCE_PATH = (
     / "ebpf"
     / "execve_trace.c"
 )
+
 DEFAULT_POLICY_PATH = (
     Path(__file__).resolve().parent.parent
     / "policy.json"
@@ -101,7 +102,7 @@ class ExecveController:
         key = target_pid_map.Key(0)
         value = target_pid_map.Leaf(self.target_pid)
         target_pid_map[key] = value
-        
+
         # Exempt the daemon itself from its own enforcement
         try:
             exempt_pid_map = self.bpf["exempt_pid_map"]
@@ -314,15 +315,18 @@ class ExecveController:
 
     def setup_signal_handlers(self) -> None:
         """Register signal handlers for SIGINT and SIGTERM for graceful shutdown."""
+
         def _signal_handler(signum, frame):
             sig_name = (
                 signal.Signals(signum).name
                 if hasattr(signal, "Signals")
                 else str(signum)
             )
+
             self.logger.info(
                 f"Received signal {sig_name} ({signum}). Initiating graceful shutdown..."
             )
+
             self.running = False
 
         try:
@@ -335,7 +339,9 @@ class ExecveController:
     def cleanup(self) -> None:
         """Gracefully detach eBPF hooks and clean up kernel resources."""
         if self.bpf is not None:
-            self.logger.info("Cleaning up eBPF hooks and kernel resources...")
+            self.logger.info(
+                "Cleaning up eBPF hooks and kernel resources..."
+            )
 
             for event in list(self.attached_kprobes):
                 try:
@@ -344,15 +350,20 @@ class ExecveController:
                     self.logger.warning(
                         f"Failed to detach kprobe '{event}': {exc}"
                     )
+
             self.attached_kprobes.clear()
 
             try:
                 self.bpf.cleanup()
             except Exception as exc:
-                self.logger.warning(f"Error during BPF cleanup: {exc}")
+                self.logger.warning(
+                    f"Error during BPF cleanup: {exc}"
+                )
 
             self.bpf = None
-            self.logger.info("KernelGuard cleanup completed successfully.")
+            self.logger.info(
+                "KernelGuard cleanup completed successfully."
+            )
 
     def __enter__(self):
         self.load()
@@ -369,14 +380,23 @@ class ExecveController:
             )
 
         self.running = True
+
         while self.running:
             try:
-                task, pid, cpu, flags, ts, msg = self.bpf.trace_fields()
+                task, pid, cpu, flags, ts, msg = self.bpf.trace_fields(
+                    nonblocking=True
+                )
+
+                if task is None:
+                    continue
+
             except ValueError:
                 continue
+
             except (KeyboardInterrupt, SystemExit):
                 self.running = False
                 break
+
             except Exception:
                 if not self.running:
                     break
@@ -418,7 +438,11 @@ class ExecveController:
             else "All System Processes"
         )
 
-        mode = "ENFORCEMENT ENABLED (-EPERM)" if self.enforce else "MONITORING ONLY"
+        mode = (
+            "ENFORCEMENT ENABLED (-EPERM)"
+            if self.enforce
+            else "MONITORING ONLY"
+        )
 
         self.logger.banner(
             scope=scope,
@@ -435,6 +459,7 @@ class ExecveController:
 
         except KeyboardInterrupt:
             self.logger.info("\nStopping KernelGuard...")
+
         finally:
             self.cleanup()
 
