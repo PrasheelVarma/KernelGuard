@@ -21,6 +21,7 @@ def daemonize(pid_file: str = "/tmp/kernelguard.pid", log_file: str = "/tmp/kern
         sys.stderr.write(f"Fork #1 failed: {exc}\n")
         sys.exit(1)
 
+    os.chdir("/")
     os.setsid()
     os.umask(0)
 
