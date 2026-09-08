@@ -19,6 +19,7 @@ import ipaddress
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 
 from bcc import BPF
@@ -64,6 +65,9 @@ class ExecveController:
     ):
         if target_pid < 0:
             raise ValueError("target_pid must be 0 or a positive PID")
+
+        if enforce and target_pid == 0:
+            raise ValueError("System-wide enforcement (PID 0) is unsafe and disabled.")
 
         self.target_pid = target_pid
         self.enforce = enforce
@@ -388,9 +392,11 @@ class ExecveController:
                 )
 
                 if task is None:
+                    time.sleep(0.05)
                     continue
 
             except ValueError:
+                time.sleep(0.05)
                 continue
 
             except (KeyboardInterrupt, SystemExit):

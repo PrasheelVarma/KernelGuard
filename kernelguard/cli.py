@@ -21,7 +21,6 @@ def daemonize(pid_file: str = "/tmp/kernelguard.pid", log_file: str = "/tmp/kern
         sys.stderr.write(f"Fork #1 failed: {exc}\n")
         sys.exit(1)
 
-    os.chdir("/")
     os.setsid()
     os.umask(0)
 
@@ -110,6 +109,12 @@ def main() -> None:
 
     if args.pid < 0:
         parser.error("--pid must be 0 or a positive PID")
+
+    if args.enforce and args.pid == 0:
+        parser.error(
+            "System-wide enforcement (PID 0) is disabled for safety. "
+            "You must specify a target --pid > 0 when using --enforce."
+        )
 
     if not args.policy.exists():
         parser.error(f"Policy file does not exist: {args.policy}")
