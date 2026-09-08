@@ -26,6 +26,12 @@ BPF_ARRAY(enforcement_enabled, u32, 1);
 
 BPF_HASH(network_allowed_map, u32, u8, 256);
 
+struct in6_addr_kg {
+    unsigned char in6_u[16];
+};
+
+BPF_HASH(network_allowed_v6_map, struct in6_addr_kg, u8, 256);
+
 struct filesystem_key {
     u64 dev;
     u64 ino;
@@ -38,6 +44,14 @@ struct sockaddr_in_kg {
     unsigned short sin_port;
     unsigned int sin_addr;
     unsigned char pad[8];
+};
+
+struct sockaddr_in6_kg {
+    unsigned short sin6_family;
+    unsigned short sin6_port;
+    unsigned int sin6_flowinfo;
+    struct in6_addr_kg sin6_addr;
+    unsigned int sin6_scope_id;
 };
 
 /*
@@ -116,6 +130,12 @@ static int is_filesystem_allowed(struct filesystem_key* key)
     return allowed != NULL;
 }
 
+static int is_network_allowed_v6(struct in6_addr_kg *ip)
+{
+    u8* allowed = network_allowed_v6_map.lookup(ip);
+    return allowed != NULL;
+}
+
 int trace_execve(struct pt_regs* ctx)
 {
     u32 pid = bpf_get_current_pid_tgid() >> 32;
@@ -167,6 +187,36 @@ int trace_tcp_connect(struct pt_regs* ctx)
     bpf_trace_printk(
         "tcp_connect ip=%u\n",
         ip);
+
+    return 0;
+}
+
+int trace_tcp_v6_connect(struct pt_regs* ctx)
+{
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+
+    if (!is_target_pid(pid)) {
+        return 0;
+    }
+
+    struct sockaddr_in6_kg addr = { };
+    void* user_addr = (void*)PT_REGS_PARM2(ctx);
+
+    if (user_addr == NULL) {
+        return 0;
+    }
+
+    bpf_probe_read_user(
+        &addr,
+        sizeof(addr),
+        user_addr);
+
+    u64 hi = *(u64*)&addr.sin6_addr.in6_u[0];
+    u64 lo = *(u64*)&addr.sin6_addr.in6_u[8];
+
+    bpf_trace_printk(
+        "tcp_v6_connect hi=%llu lo=%llu\n",
+        hi, lo);
 
     return 0;
 }
@@ -251,19 +301,35 @@ LSM_PROBE(socket_connect,
         
     bpf_trace_printk("socket_connect pid=%d family=%d len=%d\n", pid, addr.sin_family, addrlen);
 
-    if (addr.sin_family != AF_INET) {
-        return 0;
+    if (addr.sin_family == AF_INET) {
+        if (is_network_allowed(addr.sin_addr)) {
+            return 0;
+        }
+
+        bpf_trace_printk(
+            "BLOCK tcp_connect ip=%u\n",
+            addr.sin_addr);
+
+        return -EPERM;
+    } else if (addr.sin_family == 10) { // AF_INET6
+        struct sockaddr_in6_kg addr6 = { };
+        bpf_probe_read_kernel(&addr6, sizeof(addr6), address);
+        
+        if (is_network_allowed_v6(&addr6.sin6_addr)) {
+            return 0;
+        }
+
+        u64 hi = *(u64*)&addr6.sin6_addr.in6_u[0];
+        u64 lo = *(u64*)&addr6.sin6_addr.in6_u[8];
+
+        bpf_trace_printk(
+            "BLOCK tcp_v6_connect hi=%llu lo=%llu\n",
+            hi, lo);
+
+        return -EPERM;
     }
 
-    if (is_network_allowed(addr.sin_addr)) {
-        return 0;
-    }
-
-    bpf_trace_printk(
-        "BLOCK tcp_connect ip=%u\n",
-        addr.sin_addr);
-
-    return -EPERM;
+    return 0;
 }
 
 /*

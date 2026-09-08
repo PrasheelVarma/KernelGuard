@@ -93,11 +93,7 @@ class Policy:
                     "Every value in 'network.allowed_ips' must be a string."
                 )
             try:
-                addr = ipaddress.ip_address(ip)
-                if addr.version != 4:
-                    raise PolicyValidationError(
-                        f"Only IPv4 policy entries are supported: {ip}"
-                    )
+                ipaddress.ip_address(ip)
             except ValueError:
                 raise PolicyValidationError(
                     f"Invalid IP address format: {ip}"
