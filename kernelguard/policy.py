@@ -119,8 +119,28 @@ class Policy:
         return ip_address in self.network_allowed_ips
 
     def is_path_allowed(self, file_path: str) -> bool:
-        """Return True when the filesystem path is explicitly allowed."""
-        return self._normalize_path(file_path) in self.filesystem_allowed_paths
+        """
+        Return True when the filesystem path is explicitly allowed.
+
+        Matches exact normalized paths, directory rule prefixes, and
+        kernel trace path fragments (e.g. 'tmp/file.txt' or 'file.txt').
+        """
+        normalized = self._normalize_path(file_path)
+        if normalized in self.filesystem_allowed_paths:
+            return True
+
+        # Check if file_path is inside any allowed directory path
+        for allowed in self.filesystem_allowed_paths:
+            if normalized.startswith(allowed.rstrip("/") + "/"):
+                return True
+
+        # Handle filename basenames or relative path fragments emitted by kernel tracing
+        clean_path = file_path.strip("/")
+        for allowed in self.filesystem_allowed_paths:
+            if allowed.endswith("/" + clean_path) or Path(allowed).name == clean_path:
+                return True
+
+        return False
 
     def check_network(self, ip_address: str) -> bool:
         """Evaluate a network destination against the policy."""

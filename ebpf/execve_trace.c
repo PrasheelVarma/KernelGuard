@@ -37,7 +37,15 @@ struct filesystem_key {
     u64 ino;
 };
 
-BPF_HASH(filesystem_allowed_map, struct filesystem_key, u8, 1024);
+struct parent_name_key {
+    u64 dev;
+    u64 parent_ino;
+    u64 name_hash;
+};
+
+BPF_HASH(filesystem_allowed_map, struct filesystem_key, u8, 2048);
+BPF_HASH(filesystem_allowed_parent_map, struct filesystem_key, u8, 1024);
+BPF_HASH(filesystem_allowed_name_map, struct parent_name_key, u8, 1024);
 
 struct sockaddr_in_kg {
     short sin_family;
@@ -77,8 +85,11 @@ struct file {
 };
 
 struct dentry {
-    unsigned char pad[40];
+    unsigned char pad1[24];
+    void* d_parent;
+    unsigned char pad2[8];
     struct qstr d_name;
+    void* d_inode;
 };
 
 static int is_exempt_pid(u32 pid)
@@ -123,11 +134,83 @@ static int is_network_allowed(u32 ip)
     return allowed != NULL;
 }
 
-static int is_filesystem_allowed(struct filesystem_key* key)
-{
-    u8* allowed = filesystem_allowed_map.lookup(key);
+static __always_inline u64 hash_filename(const char *name) {
+    u64 hash = 5381;
+    #pragma unroll
+    for (int i = 0; i < 64; i++) {
+        char c = name[i];
+        if (c == 0) break;
+        hash = ((hash << 5) + hash) + (u64)c;
+    }
+    return hash;
+}
 
-    return allowed != NULL;
+static int is_filesystem_allowed(struct filesystem_key* file_key, void* dentry_ptr)
+{
+    u8* allowed = filesystem_allowed_map.lookup(file_key);
+    if (allowed != NULL) {
+        return 1;
+    }
+
+    if (dentry_ptr == NULL) {
+        return 0;
+    }
+
+    struct dentry dentry = { };
+    bpf_probe_read_kernel(&dentry, sizeof(dentry), dentry_ptr);
+
+    if (dentry.d_parent == NULL) {
+        return 0;
+    }
+
+    struct dentry parent_dentry = { };
+    bpf_probe_read_kernel(&parent_dentry, sizeof(parent_dentry), dentry.d_parent);
+
+    if (parent_dentry.d_inode == NULL) {
+        return 0;
+    }
+
+    struct kg_inode parent_inode = { };
+    bpf_probe_read_kernel(&parent_inode, sizeof(parent_inode), parent_dentry.d_inode);
+
+    struct kg_super_block* sb = NULL;
+    bpf_probe_read_kernel(&sb, sizeof(sb), &parent_inode.i_sb);
+
+    if (sb == NULL) {
+        return 0;
+    }
+
+    struct filesystem_key parent_key = { };
+    bpf_probe_read_kernel(&parent_key.ino, sizeof(parent_key.ino), &parent_inode.i_ino);
+    bpf_probe_read_kernel(&parent_key.dev, sizeof(parent_key.dev), &sb->s_dev);
+
+    u8* parent_allowed = filesystem_allowed_parent_map.lookup(&parent_key);
+    if (parent_allowed != NULL) {
+        u8 one = 1;
+        filesystem_allowed_map.update(file_key, &one);
+        return 1;
+    }
+
+    if (dentry.d_name.name != NULL) {
+        char filename[64] = { };
+        bpf_probe_read_kernel_str(filename, sizeof(filename), dentry.d_name.name);
+
+        u64 name_hash = hash_filename(filename);
+        struct parent_name_key pn_key = {
+            .dev = parent_key.dev,
+            .parent_ino = parent_key.ino,
+            .name_hash = name_hash,
+        };
+
+        u8* name_allowed = filesystem_allowed_name_map.lookup(&pn_key);
+        if (name_allowed != NULL) {
+            u8 one = 1;
+            filesystem_allowed_map.update(file_key, &one);
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 static int is_network_allowed_v6(struct in6_addr_kg *ip)
@@ -269,6 +352,23 @@ int trace_vfs_write(struct pt_regs* ctx)
         sizeof(filename),
         name.name);
 
+    if (dentry.d_parent != NULL) {
+        struct dentry parent_dentry = { };
+        bpf_probe_read_kernel(&parent_dentry, sizeof(parent_dentry), dentry.d_parent);
+        if (parent_dentry.d_name.name != NULL) {
+            char parent_name[64] = { };
+            bpf_probe_read_kernel_str(parent_name, sizeof(parent_name), parent_dentry.d_name.name);
+            if (parent_name[0] != '\0' && parent_name[0] != '/') {
+                bpf_trace_printk(
+                    "vfs_write PID %d: %s/%s\n",
+                    pid,
+                    parent_name,
+                    filename);
+                return 0;
+            }
+        }
+    }
+
     bpf_trace_printk(
         "vfs_write PID %d: %s\n",
         pid,
@@ -402,7 +502,10 @@ LSM_PROBE(file_permission,
     bpf_probe_read_kernel(&key.ino, sizeof(key.ino), &inode->i_ino);
     bpf_probe_read_kernel(&key.dev, sizeof(key.dev), &sb->s_dev);
 
-    if (is_filesystem_allowed(&key)) {
+    struct path f_path = { };
+    bpf_probe_read_kernel(&f_path, sizeof(f_path), &file->f_path);
+
+    if (is_filesystem_allowed(&key, f_path.dentry)) {
         return 0;
     }
 

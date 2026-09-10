@@ -123,9 +123,9 @@ def test_pid_isolation() -> None:
 def main() -> None:
     pid = os.getpid()
 
-    # Pre-create the allowed file so os.stat() inside controller.py works properly
+    # Allowed files no longer require pre-creation thanks to parent directory + filename hash map lookups in KernelGuard
     try:
-        Path("/tmp/kernelguard-test.txt").touch()
+        Path("/tmp/kernelguard-test.txt").unlink(missing_ok=True)
     except Exception:
         pass
 

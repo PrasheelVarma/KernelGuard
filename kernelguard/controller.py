@@ -157,29 +157,60 @@ class ExecveController:
                     f"Invalid network policy entry: {ip_address}"
                 ) from exc
 
+    @staticmethod
+    def _hash_filename(name: str) -> int:
+        hash_val = 5381
+        for char in name[:64].encode("utf-8"):
+            hash_val = ((hash_val << 5) + hash_val + char) & 0xFFFFFFFFFFFFFFFF
+        return hash_val
+
     def _load_filesystem_policy(self) -> None:
         """
-        Populate the BPF filesystem allowlist with device/inode pairs.
+        Populate BPF filesystem allowlists.
 
-        The kernel LSM hook works with the inode attached to the file,
-        so user space resolves each configured path once with stat().
+        - If the target path exists, load its (dev, ino) into filesystem_allowed_map.
+        - If the target path is a file, load its parent directory (dev, parent_ino)
+          and filename hash into filesystem_allowed_name_map so newly created or
+          replaced files are allowed dynamically.
+        - If the target path is a directory, load (dev, dir_ino) into
+          filesystem_allowed_parent_map.
         """
         filesystem_map = self.bpf["filesystem_allowed_map"]
+        parent_map = self.bpf["filesystem_allowed_parent_map"]
+        name_map = self.bpf["filesystem_allowed_name_map"]
 
         for file_path in self.policy.filesystem_allowed_paths:
-            try:
-                stat_result = os.stat(file_path)
-            except OSError:
-                # A path that does not exist cannot currently be mapped
-                # to an inode. The policy engine still retains the path.
-                continue
+            path_obj = Path(file_path).expanduser().resolve(strict=False)
 
-            key = filesystem_map.Key()
-            key.dev = stat_result.st_dev
-            key.ino = stat_result.st_ino
+            # 1. If file/directory exists, map its exact inode
+            if path_obj.exists():
+                try:
+                    stat_res = path_obj.stat()
+                    key = filesystem_map.Key()
+                    key.dev = stat_res.st_dev
+                    key.ino = stat_res.st_ino
+                    filesystem_map[key] = filesystem_map.Leaf(1)
 
-            value = filesystem_map.Leaf(1)
-            filesystem_map[key] = value
+                    if path_obj.is_dir():
+                        parent_key = parent_map.Key()
+                        parent_key.dev = stat_res.st_dev
+                        parent_key.ino = stat_res.st_ino
+                        parent_map[parent_key] = parent_map.Leaf(1)
+                except OSError:
+                    pass
+
+            # 2. Map parent directory + filename hash for dynamic file creation / replacement
+            parent_dir = path_obj.parent
+            if parent_dir.exists() and parent_dir.is_dir():
+                try:
+                    parent_stat = parent_dir.stat()
+                    pn_key = name_map.Key()
+                    pn_key.dev = parent_stat.st_dev
+                    pn_key.parent_ino = parent_stat.st_ino
+                    pn_key.name_hash = self._hash_filename(path_obj.name)
+                    name_map[pn_key] = name_map.Leaf(1)
+                except OSError:
+                    pass
 
     def _configure_policy_maps(self) -> None:
         """Load policy allowlists and enforcement state into BPF maps."""
