@@ -164,6 +164,13 @@ class ExecveController:
             hash_val = ((hash_val << 5) + hash_val + char) & 0xFFFFFFFFFFFFFFFF
         return hash_val
 
+    @staticmethod
+    def _encode_dev(st_dev: int) -> int:
+        """Convert userspace/glibc st_dev to Linux kernel dev_t format."""
+        major = os.major(st_dev)
+        minor = os.minor(st_dev)
+        return (major << 20) | minor
+
     def _load_filesystem_policy(self) -> None:
         """
         Populate BPF filesystem allowlists.
@@ -187,13 +194,13 @@ class ExecveController:
                 try:
                     stat_res = path_obj.stat()
                     key = filesystem_map.Key()
-                    key.dev = stat_res.st_dev
+                    key.dev = self._encode_dev(stat_res.st_dev)
                     key.ino = stat_res.st_ino
                     filesystem_map[key] = filesystem_map.Leaf(1)
 
                     if path_obj.is_dir():
                         parent_key = parent_map.Key()
-                        parent_key.dev = stat_res.st_dev
+                        parent_key.dev = self._encode_dev(stat_res.st_dev)
                         parent_key.ino = stat_res.st_ino
                         parent_map[parent_key] = parent_map.Leaf(1)
                 except OSError:
@@ -205,7 +212,7 @@ class ExecveController:
                 try:
                     parent_stat = parent_dir.stat()
                     pn_key = name_map.Key()
-                    pn_key.dev = parent_stat.st_dev
+                    pn_key.dev = self._encode_dev(parent_stat.st_dev)
                     pn_key.parent_ino = parent_stat.st_ino
                     pn_key.name_hash = self._hash_filename(path_obj.name)
                     name_map[pn_key] = name_map.Leaf(1)

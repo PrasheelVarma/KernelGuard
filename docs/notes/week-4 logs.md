@@ -13,13 +13,17 @@ Format: newest entries at the top.
 ### Implementation & Audit Findings
 
 - Completed full code audit across eBPF C program, Python controller, CLI, and policy modules.
-- Documented findings regarding LSM struct layout compatibility, filesystem inode mapping lifecycle, packaging path resolution, and IPv6 enforcement.
-- Outlined remediation roadmap to bring KernelGuard to production readiness.
+- Solved the dynamic filesystem lifecycle challenge where created/recreated files were incorrectly blocked. Introduced a 3-tier BPF map lookup: exact `(dev, ino)`, parent directory `(dev, parent_ino)`, and parent + 64-bit djb2 filename hash `(dev, parent_ino, name_hash)`.
+- Interrogated live kernel memory layouts using Clang type introspection and aligned `struct file` (f_path at +64, f_inode at +32), `struct dentry` (d_parent at +24, d_name at +32, d_inode at +48), and `struct qstr` (hash_len at +0, name at +8).
+- Fixed 32-bit `dev_t` memory overwrite bug in eBPF and added `_encode_dev()` in Python controller to normalize glibc `st_dev` to the kernel's `(major << 20) | minor` representation.
+- Achieved 100% test pass on `tests/test_enforcement_audit.py` (Network Allow/Deny, Filesystem Allow/Deny, and PID Isolation).
+- Created comprehensive debugging log in `docs/notes/filesystem-enforcement-debugging.md`.
 
 ### End-of-day status
 
 - [x] Final review against official project requirements.
 - [x] Comprehensive code audit and edge-case documentation.
+- [x] Filesystem LSM dynamic lifecycle & memory alignment fix verified.
 - [x] Release readiness check.
 
 **Day 7 Final Project Review complete.**

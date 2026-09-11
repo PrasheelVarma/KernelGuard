@@ -63,13 +63,18 @@ struct sockaddr_in6_kg {
 };
 
 /*
- * Existing Week 2 filesystem tracing compatibility structures.
- * These must remain because including <linux/fs.h> causes BCC header
- * compilation failures on the current kernel.
+ * Tracing and enforcement compatibility structures.
+ * These match the exact kernel memory offsets verified against BTF / kernel headers:
+ * - struct file: f_inode at +32, f_path at +64
+ * - struct path: mnt at +0, dentry at +8
+ * - struct dentry: d_parent at +24, d_name at +32, d_inode at +48
+ * - struct qstr: name at +8 (after hash_len at +0)
+ * - struct inode: i_mode at +0, i_sb at +40, i_ino at +64
+ * - struct super_block: s_dev at +16
  */
 struct qstr {
+    char pad[8];
     const unsigned char* name;
-    unsigned int hash_len;
 };
 
 struct path {
@@ -77,17 +82,29 @@ struct path {
     void* dentry;
 };
 
+struct kg_super_block {
+    char pad[16];
+    dev_t s_dev;
+};
+
+struct kg_inode {
+    unsigned short i_mode;
+    char pad1[38];
+    struct kg_super_block* i_sb;
+    char pad2[16];
+    u64 i_ino;
+};
+
 struct file {
-    void* f_op;
-    void* f_mode;
-    void* f_pos;
+    char pad1[32];
+    struct kg_inode* f_inode;
+    char pad2[24];
     struct path f_path;
 };
 
 struct dentry {
     unsigned char pad1[24];
     void* d_parent;
-    unsigned char pad2[8];
     struct qstr d_name;
     void* d_inode;
 };
@@ -182,7 +199,9 @@ static int is_filesystem_allowed(struct filesystem_key* file_key, void* dentry_p
 
     struct filesystem_key parent_key = { };
     bpf_probe_read_kernel(&parent_key.ino, sizeof(parent_key.ino), &parent_inode.i_ino);
-    bpf_probe_read_kernel(&parent_key.dev, sizeof(parent_key.dev), &sb->s_dev);
+    u32 parent_dev = 0;
+    bpf_probe_read_kernel(&parent_dev, sizeof(parent_dev), &sb->s_dev);
+    parent_key.dev = (u64)parent_dev;
 
     u8* parent_allowed = filesystem_allowed_parent_map.lookup(&parent_key);
     if (parent_allowed != NULL) {
@@ -352,23 +371,6 @@ int trace_vfs_write(struct pt_regs* ctx)
         sizeof(filename),
         name.name);
 
-    if (dentry.d_parent != NULL) {
-        struct dentry parent_dentry = { };
-        bpf_probe_read_kernel(&parent_dentry, sizeof(parent_dentry), dentry.d_parent);
-        if (parent_dentry.d_name.name != NULL) {
-            char parent_name[64] = { };
-            bpf_probe_read_kernel_str(parent_name, sizeof(parent_name), parent_dentry.d_name.name);
-            if (parent_name[0] != '\0' && parent_name[0] != '/') {
-                bpf_trace_printk(
-                    "vfs_write PID %d: %s/%s\n",
-                    pid,
-                    parent_name,
-                    filename);
-                return 0;
-            }
-        }
-    }
-
     bpf_trace_printk(
         "vfs_write PID %d: %s\n",
         pid,
@@ -440,23 +442,6 @@ LSM_PROBE(socket_connect,
  * The actual offsets are resolved by BPF's BTF-aware CO-RE access through
  * preserve_access_index.
  */
-struct kg_super_block {
-    char pad[16];
-    dev_t s_dev;
-};
-
-struct kg_inode {
-    unsigned short i_mode;
-    char pad1[38];
-    struct kg_super_block* i_sb;
-    char pad2[16];
-    u64 i_ino;
-};
-
-struct kg_file {
-    char pad[32];
-    struct kg_inode* f_inode;
-};
 
 LSM_PROBE(file_permission,
     struct file* file,
@@ -472,10 +457,9 @@ LSM_PROBE(file_permission,
         return 0;
     }
 
-    struct kg_file* kg_file = (struct kg_file*)file;
     struct kg_inode* inode = NULL;
 
-    bpf_probe_read_kernel(&inode, sizeof(inode), &kg_file->f_inode);
+    bpf_probe_read_kernel(&inode, sizeof(inode), &file->f_inode);
 
     if (inode == NULL) {
         return 0;
@@ -500,7 +484,9 @@ LSM_PROBE(file_permission,
     struct filesystem_key key = { };
 
     bpf_probe_read_kernel(&key.ino, sizeof(key.ino), &inode->i_ino);
-    bpf_probe_read_kernel(&key.dev, sizeof(key.dev), &sb->s_dev);
+    u32 file_dev = 0;
+    bpf_probe_read_kernel(&file_dev, sizeof(file_dev), &sb->s_dev);
+    key.dev = (u64)file_dev;
 
     struct path f_path = { };
     bpf_probe_read_kernel(&f_path, sizeof(f_path), &file->f_path);

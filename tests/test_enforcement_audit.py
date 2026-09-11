@@ -130,14 +130,16 @@ def main() -> None:
         pass
 
     print(f"TEST_PID={pid}", flush=True)
-    print("Waiting 15 seconds for KernelGuard to attach...", flush=True)
     print(
         "Start KernelGuard in another terminal using the PID above:",
         flush=True,
     )
-    print(f"    sudo python3 -m kernelguard.cli --enforce --pid {pid}", flush=True)
+    print(f"    sudo python3 -m kernelguard.cli --enforce --pid {pid}\n", flush=True)
 
-    time.sleep(15)
+    try:
+        input("Press ENTER once KernelGuard shows 'ENFORCEMENT ENABLED'...")
+    except (EOFError, KeyboardInterrupt):
+        time.sleep(5)
 
     test_network()
     test_filesystem()
