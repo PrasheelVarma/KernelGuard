@@ -148,28 +148,28 @@ pip install -r requirements.txt
 
 ### Usage
 
-Monitor supported events:
+Safely execute an untrusted Python script under kernel sandboxing:
 
 ```bash
-sudo python3 -m kernelguard.cli
+sudo python3 -m kernelguard.cli run script.py
 ```
 
-Monitor a specific target process:
+Pass custom arguments to the script with policy enforcement:
 
 ```bash
-sudo python3 -m kernelguard.cli --pid <PID>
+sudo python3 -m kernelguard.cli run --policy policy.json script.py --arg1 value
 ```
 
-Enable enforcement for a target process:
+Attach monitoring/enforcement to an existing target process:
 
 ```bash
-sudo python3 -m kernelguard.cli --pid <PID> --enforce
+sudo python3 -m kernelguard.cli attach --pid <PID> --enforce
 ```
 
-Use a specific policy:
+Monitor supported events system-wide (monitoring only):
 
 ```bash
-sudo python3 -m kernelguard.cli --pid <PID> --enforce --policy policy.json
+sudo python3 -m kernelguard.cli --pid 0
 ```
 
 KernelGuard currently monitors and handles:
@@ -180,7 +180,7 @@ KernelGuard currently monitors and handles:
 
 Target-process filtering is provided through the eBPF `target_pid_map`.
 
-> **Development note:** Active enforcement can affect real system operations depending on the target scope and policy. Review the policy and target PID before enabling enforcement.
+> **Safety note:** In `run` mode, KernelGuard automatically drops child privileges to the invoking user's `SUDO_UID`/`SUDO_GID` before execution and holds the child in a barrier until eBPF maps are initialized, guaranteeing zero-day enforcement without root escalation.
 
 ---
 

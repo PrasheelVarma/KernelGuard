@@ -66,9 +66,6 @@ class ExecveController:
         if target_pid < 0:
             raise ValueError("target_pid must be 0 or a positive PID")
 
-        if enforce and target_pid == 0:
-            raise ValueError("System-wide enforcement (PID 0) is unsafe and disabled.")
-
         self.target_pid = target_pid
         self.enforce = enforce
         self.source_path = source_path
@@ -228,6 +225,12 @@ class ExecveController:
 
     def load(self) -> None:
         """Load policy, compile eBPF, configure maps, and attach kprobes."""
+        if self.enforce and self.target_pid == 0:
+            raise ControllerError(
+                "System-wide enforcement (PID 0) is unsafe and disabled. "
+                "Specify a target PID > 0."
+            )
+
         self._check_privileges()
         self._check_source_exists()
         self._load_policy()
@@ -504,6 +507,160 @@ class ExecveController:
         except KeyboardInterrupt:
             self.logger.info("\nStopping KernelGuard...")
 
+        finally:
+            self.cleanup()
+
+    @staticmethod
+    def _drop_privileges() -> None:
+        """
+        Drop child process privileges from root to the invoking user's SUDO_UID / SUDO_GID.
+        If SUDO_UID is not set, no privilege drop occurs.
+        """
+        sudo_uid = os.environ.get("SUDO_UID")
+        sudo_gid = os.environ.get("SUDO_GID")
+        sudo_user = os.environ.get("SUDO_USER")
+
+        if sudo_uid and sudo_gid:
+            try:
+                uid = int(sudo_uid)
+                gid = int(sudo_gid)
+
+                if sudo_user:
+                    try:
+                        groups = os.getgrouplist(sudo_user, gid)
+                        os.setgroups(groups)
+                    except Exception:
+                        os.setgroups([gid])
+                else:
+                    os.setgroups([gid])
+
+                os.setgid(gid)
+                os.setuid(uid)
+            except Exception as exc:
+                sys.stderr.write(f"Warning: Failed to drop privileges to UID {sudo_uid}: {exc}\n")
+
+    def run_script(
+        self,
+        script_path: Path,
+        script_args: list[str] | None = None,
+        daemon: bool = False,
+    ) -> int:
+        """
+        Launch a Python script under zero-day eBPF sandbox confinement with privilege dropping.
+
+        1. Open an IPC synchronization pipe barrier.
+        2. Fork a child process.
+        3. In parent: set self.target_pid = child_pid FIRST, then load eBPF & configure BPF maps.
+        4. In child: wait on pipe -> drop privileges to SUDO_UID/SUDO_GID -> execv target script.
+        5. In parent: write to pipe to unblock child, monitor trace events until child exits.
+        6. Clean up BPF resources and return child exit code.
+        """
+        script_args = script_args or []
+        script_path = Path(script_path).resolve()
+
+        if not script_path.exists():
+            raise ControllerError(f"Script file does not exist: {script_path}")
+
+        self._check_privileges()
+        self._check_source_exists()
+
+        pipe_r, pipe_w = os.pipe()
+
+        child_pid = os.fork()
+
+        if child_pid == 0:
+            # CHILD PROCESS
+            os.close(pipe_w)
+            try:
+                os.read(pipe_r, 1)
+            except Exception:
+                pass
+            finally:
+                os.close(pipe_r)
+
+            self._drop_privileges()
+
+            cmd = [sys.executable, str(script_path)] + list(script_args)
+            try:
+                os.execv(sys.executable, cmd)
+            except Exception as exc:
+                sys.stderr.write(f"Failed to execv target script: {exc}\n")
+                os._exit(1)
+
+        # PARENT PROCESS
+        os.close(pipe_r)
+
+        # 1. Assign child PID FIRST before loading eBPF and map configurations
+        self.target_pid = child_pid
+
+        try:
+            # 2. Load eBPF programs and write target_pid into target_pid_map
+            self.load()
+
+            self.setup_signal_handlers()
+
+            self.logger.banner(
+                scope=f"PID {self.target_pid} ({script_path.name})",
+                policy_path=str(self.policy_path),
+                mode="ENFORCEMENT ENABLED (-EPERM)" if self.enforce else "MONITORING ONLY",
+                daemon=daemon,
+            )
+            self.logger.table_header()
+
+            # 3. Unblock child process now that eBPF target_pid_map is ready
+            os.write(pipe_w, b"1")
+            os.close(pipe_w)
+
+            # 4. Monitor trace events while child process is running
+            exit_code = 0
+            while self.running:
+                # Check if child process exited
+                try:
+                    pid, status = os.waitpid(child_pid, os.WNOHANG)
+                    if pid == child_pid:
+                        if os.WIFEXITED(status):
+                            exit_code = os.WEXITSTATUS(status)
+                        elif os.WIFSIGNALED(status):
+                            exit_code = 128 + os.TERMSIG(status)
+                        break
+                except ChildProcessError:
+                    break
+
+                try:
+                    task, pid, cpu, flags, ts, msg = self.bpf.trace_fields(nonblocking=True)
+                    if task is not None:
+                        task_name = task.decode(errors="replace")
+                        message = msg.decode(errors="replace")
+                        event_type, detail = self._normalize_event(message)
+                        decision = self._evaluate_policy(event_type, detail)
+                        self.logger.log_event({
+                            "pid": pid,
+                            "task": task_name,
+                            "event_type": event_type,
+                            "detail": detail,
+                            "decision": decision,
+                        })
+                    else:
+                        time.sleep(0.05)
+                except ValueError:
+                    time.sleep(0.05)
+                except (KeyboardInterrupt, SystemExit):
+                    self.running = False
+                    break
+                except Exception:
+                    if not self.running:
+                        break
+                    continue
+
+            return exit_code
+
+        except Exception as exc:
+            try:
+                os.write(pipe_w, b"1")
+                os.close(pipe_w)
+            except OSError:
+                pass
+            raise exc
         finally:
             self.cleanup()
 
