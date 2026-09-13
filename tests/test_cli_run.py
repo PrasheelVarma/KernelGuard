@@ -59,17 +59,70 @@ class TestControllerRunScript(unittest.TestCase):
         with self.assertRaises(ControllerError):
             self.controller.run_script(nonexistent)
 
+    @patch("os.geteuid", return_value=1000)
+    @patch("os.getuid", return_value=1000)
     @patch("os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000", "SUDO_USER": "testuser"})
     @patch("os.setuid")
     @patch("os.setgid")
     @patch("os.setgroups")
     @patch("os.getgrouplist", return_value=[1000, 998])
-    def test_drop_privileges(self, mock_getgrouplist, mock_setgroups, mock_setgid, mock_setuid) -> None:
-        """Verify _drop_privileges drops to SUDO_UID and SUDO_GID."""
+    def test_drop_privileges_success(
+        self, mock_getgrouplist, mock_setgroups, mock_setgid, mock_setuid, mock_getuid, mock_geteuid
+    ) -> None:
+        """Verify _drop_privileges drops to SUDO_UID and SUDO_GID and verifies."""
         ExecveController._drop_privileges()
         mock_setgroups.assert_called_once_with([1000, 998])
         mock_setgid.assert_called_once_with(1000)
         mock_setuid.assert_called_once_with(1000)
+
+    @patch("os.environ", {"SUDO_UID": "0", "SUDO_GID": "0", "SUDO_USER": "root"})
+    def test_drop_privileges_rejects_root_target(self) -> None:
+        """Verify _drop_privileges fails safely if SUDO_UID is 0."""
+        with self.assertRaises(ControllerError) as ctx:
+            ExecveController._drop_privileges()
+        self.assertIn("cannot run as root", str(ctx.exception))
+
+    @patch("os.environ", {"SUDO_UID": "1000"})
+    def test_drop_privileges_incomplete_sudo_env(self) -> None:
+        """Verify _drop_privileges fails if SUDO_UID is set without SUDO_GID."""
+        with self.assertRaises(ControllerError) as ctx:
+            ExecveController._drop_privileges()
+        self.assertIn("Incomplete sudo environment", str(ctx.exception))
+
+    @patch("os.environ", {"SUDO_UID": "invalid", "SUDO_GID": "1000"})
+    def test_drop_privileges_invalid_env_values(self) -> None:
+        """Verify _drop_privileges fails if SUDO_UID is not a valid integer."""
+        with self.assertRaises(ControllerError) as ctx:
+            ExecveController._drop_privileges()
+        self.assertIn("Invalid SUDO_UID/SUDO_GID", str(ctx.exception))
+
+    @patch("os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000", "SUDO_USER": "testuser"})
+    @patch("os.setgroups")
+    @patch("os.setgid")
+    @patch("os.setuid", side_effect=PermissionError("Operation not permitted"))
+    @patch("os.getgrouplist", return_value=[1000])
+    def test_drop_privileges_setuid_failure_raises(
+        self, mock_getgrouplist, mock_setuid, mock_setgid, mock_setgroups
+    ) -> None:
+        """Verify _drop_privileges raises ControllerError when OS call fails."""
+        with self.assertRaises(ControllerError) as ctx:
+            ExecveController._drop_privileges()
+        self.assertIn("Failed to drop privileges", str(ctx.exception))
+
+    @patch("os.geteuid", return_value=0)  # EUID still root
+    @patch("os.getuid", return_value=1000)
+    @patch("os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000", "SUDO_USER": "testuser"})
+    @patch("os.setuid")
+    @patch("os.setgid")
+    @patch("os.setgroups")
+    @patch("os.getgrouplist", return_value=[1000])
+    def test_drop_privileges_verification_mismatch_raises(
+        self, mock_getgrouplist, mock_setgroups, mock_setgid, mock_setuid, mock_getuid, mock_geteuid
+    ) -> None:
+        """Verify _drop_privileges raises if post-drop UID/EUID verification fails."""
+        with self.assertRaises(ControllerError) as ctx:
+            ExecveController._drop_privileges()
+        self.assertIn("Privilege verification failed", str(ctx.exception))
 
 
 if __name__ == "__main__":

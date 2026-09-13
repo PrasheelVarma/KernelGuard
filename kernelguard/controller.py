@@ -514,17 +514,33 @@ class ExecveController:
     def _drop_privileges() -> None:
         """
         Drop child process privileges from root to the invoking user's SUDO_UID / SUDO_GID.
-        If SUDO_UID is not set, no privilege drop occurs.
+        If SUDO_UID / SUDO_GID are set, privilege drop is required. Any failure to drop
+        privileges will raise ControllerError to fail safely.
         """
         sudo_uid = os.environ.get("SUDO_UID")
         sudo_gid = os.environ.get("SUDO_GID")
         sudo_user = os.environ.get("SUDO_USER")
 
-        if sudo_uid and sudo_gid:
+        if sudo_uid is not None or sudo_gid is not None:
+            if sudo_uid is None or sudo_gid is None:
+                raise ControllerError(
+                    f"Incomplete sudo environment: SUDO_UID={sudo_uid}, SUDO_GID={sudo_gid}. "
+                    "Cannot safely drop privileges."
+                )
+
             try:
                 uid = int(sudo_uid)
                 gid = int(sudo_gid)
+            except ValueError as exc:
+                raise ControllerError(
+                    f"Invalid SUDO_UID/SUDO_GID values: {sudo_uid}/{sudo_gid}"
+                ) from exc
 
+            # Do not allow target to run as root if sudo invoked KernelGuard
+            if uid == 0:
+                raise ControllerError("Target process cannot run as root (UID 0).")
+
+            try:
                 if sudo_user:
                     try:
                         groups = os.getgrouplist(sudo_user, gid)
@@ -537,7 +553,17 @@ class ExecveController:
                 os.setgid(gid)
                 os.setuid(uid)
             except Exception as exc:
-                sys.stderr.write(f"Warning: Failed to drop privileges to UID {sudo_uid}: {exc}\n")
+                raise ControllerError(
+                    f"Failed to drop privileges to UID={uid}, GID={gid}: {exc}"
+                ) from exc
+
+            # Verify that privileges were actually dropped
+            current_uid = os.getuid()
+            current_euid = os.geteuid()
+            if current_uid != uid or current_euid != uid:
+                raise ControllerError(
+                    f"Privilege verification failed: expected UID {uid}, got UID={current_uid}, EUID={current_euid}"
+                )
 
     def run_script(
         self,
@@ -578,7 +604,11 @@ class ExecveController:
             finally:
                 os.close(pipe_r)
 
-            self._drop_privileges()
+            try:
+                self._drop_privileges()
+            except Exception as exc:
+                sys.stderr.write(f"Security error: failed to drop privileges: {exc}\n")
+                os._exit(1)
 
             cmd = [sys.executable, str(script_path)] + list(script_args)
             try:
