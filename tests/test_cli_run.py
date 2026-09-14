@@ -8,7 +8,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from kernelguard.cli import build_parser
-from kernelguard.controller import ExecveController, ControllerError
+from kernelguard.controller import (
+    ExecveController,
+    ControllerError,
+    get_default_ebpf_source_path,
+    get_default_policy_path,
+)
 
 
 class TestCLIRunSubcommand(unittest.TestCase):
@@ -44,6 +49,13 @@ class TestCLIRunSubcommand(unittest.TestCase):
         self.assertIsNone(args.command)
         self.assertEqual(args.pid, 5678)
         self.assertTrue(args.enforce)
+
+    def test_default_resource_path_resolution(self) -> None:
+        """Verify get_default_ebpf_source_path and get_default_policy_path return existing files."""
+        ebpf_path = get_default_ebpf_source_path()
+        policy_path = get_default_policy_path()
+        self.assertTrue(ebpf_path.exists(), f"eBPF source path does not exist: {ebpf_path}")
+        self.assertTrue(policy_path.exists(), f"Default policy path does not exist: {policy_path}")
 
 
 class TestControllerRunScript(unittest.TestCase):

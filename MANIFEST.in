@@ -1,1 +1,4 @@
 include ebpf/execve_trace.c
+include policy.json
+recursive-include kernelguard/ebpf *.c
+include kernelguard/policy.json

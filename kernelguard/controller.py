@@ -28,16 +28,30 @@ from .logger import KernelGuardLogger
 from .policy import Policy, PolicyError
 
 
-EBPF_SOURCE_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "ebpf"
-    / "execve_trace.c"
-)
+def get_default_ebpf_source_path() -> Path:
+    """Resolve the default eBPF C source file path, checking package directory then repo root."""
+    pkg_path = Path(__file__).resolve().parent / "ebpf" / "execve_trace.c"
+    if pkg_path.exists():
+        return pkg_path
+    repo_path = Path(__file__).resolve().parent.parent / "ebpf" / "execve_trace.c"
+    if repo_path.exists():
+        return repo_path
+    return pkg_path
 
-DEFAULT_POLICY_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "policy.json"
-)
+
+def get_default_policy_path() -> Path:
+    """Resolve the default policy.json path, checking package directory then repo root."""
+    pkg_path = Path(__file__).resolve().parent / "policy.json"
+    if pkg_path.exists():
+        return pkg_path
+    repo_path = Path(__file__).resolve().parent.parent / "policy.json"
+    if repo_path.exists():
+        return repo_path
+    return pkg_path
+
+
+EBPF_SOURCE_PATH = get_default_ebpf_source_path()
+DEFAULT_POLICY_PATH = get_default_policy_path()
 
 
 class ControllerError(Exception):
@@ -59,8 +73,8 @@ class ExecveController:
         self,
         target_pid: int = 0,
         enforce: bool = False,
-        source_path: Path = EBPF_SOURCE_PATH,
-        policy_path: Path = DEFAULT_POLICY_PATH,
+        source_path: Path | None = None,
+        policy_path: Path | None = None,
         logger: KernelGuardLogger | None = None,
     ):
         if target_pid < 0:
@@ -68,8 +82,8 @@ class ExecveController:
 
         self.target_pid = target_pid
         self.enforce = enforce
-        self.source_path = source_path
-        self.policy_path = policy_path
+        self.source_path = source_path or get_default_ebpf_source_path()
+        self.policy_path = policy_path or get_default_policy_path()
         self.logger = logger or KernelGuardLogger()
         self.bpf = None
         self.policy = None

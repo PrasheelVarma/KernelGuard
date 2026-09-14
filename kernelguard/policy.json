@@ -1,0 +1,16 @@
+{
+  "network": {
+    "allowed_ips": [
+      "1.1.1.1",
+      "8.8.8.8"
+    ]
+  },
+  "filesystem": {
+    "allowed_paths": [
+      "/tmp/kernelguard-test.txt",
+      "/tmp/kernelguard-audit-one.txt",
+      "/tmp/kernelguard-audit-two.txt",
+      "/tmp/kernelguard-audit-three.txt"
+    ]
+  }
+}
