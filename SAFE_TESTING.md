@@ -1,67 +1,62 @@
 # KernelGuard Safe Testing
 
-KernelGuard can enforce policy at the kernel level, so testing must be done with a controlled target process.
+KernelGuard enforces security policy at the kernel level via eBPF, so testing must be conducted with a controlled target process scope.
 
-## Safe testing rules
+## Safe Testing Rules
 
-### 1. Prefer PID-targeted testing
+### 1. Prefer `kernelguard run` for Script Testing
 
-Use a specific PID when testing monitoring or enforcement:
+The recommended way to test policy enforcement on an untrusted script is using the `run` launcher:
 
 ```bash
-sudo /opt/kernelguard/venv/bin/python3 -m kernelguard.cli \
+sudo /opt/kernelguard/venv/bin/python3 -m kernelguard.cli run \
+  --policy /home/prasheel/SATA_VAULT/developer/KernelGuard/policy.json \
+  tests/untrusted_script.py
+```
+
+This ensures:
+- The target is bound to an exact PID barrier before script execution begins.
+- Privileges are dropped to the invoking user's `SUDO_UID`/`SUDO_GID`.
+- Active enforcement is strictly confined to that target PID.
+
+### 2. Use PID-Targeted `attach` for Pre-Existing Processes
+
+When testing against an existing process, supply its explicit PID:
+
+```bash
+sudo /opt/kernelguard/venv/bin/python3 -m kernelguard.cli attach \
   --pid <PID> \
+  --enforce \
   --policy /home/prasheel/SATA_VAULT/developer/KernelGuard/policy.json
 ```
 
-This keeps KernelGuard focused on the intended test process.
+### 3. System-Wide Enforcement (PID 0) is Strictly Prohibited
 
-### 2. Do not use broad enforcement during normal testing
-
-Avoid running:
+Never attempt:
 
 ```bash
 --enforce --pid 0
 ```
 
-PID `0` means that there is no PID restriction. Combined with enforcement, this can affect unrelated system processes.
+KernelGuard's CLI and Controller actively reject `--enforce` with PID `0` as a fail-safe measure to prevent taking down or disrupting host system processes.
 
-### 3. Do not start the systemd enforcement service casually
+### 4. systemd Service Configuration is Monitoring-Only
 
-The installed service currently starts KernelGuard with enforcement enabled and without a specific PID.
+The packaged `kernelguard.service` systemd unit starts KernelGuard in background **monitoring-only** mode without active syscall blocking (`--enforce` is not passed). Active `-EPERM` enforcement is reserved for targeted PID executions (`run` or `attach --pid <PID>`).
 
-Before using the service, confirm that the policy and enforcement behavior are safe for the current test environment.
+### 5. Clean Up Test Processes
 
-### 4. Use disposable test processes
-
-Testing should use small Python processes created specifically for KernelGuard testing.
-
-Example:
-
-```bash
-python3 -c 'import os,time; print(os.getpid(), flush=True); time.sleep(300)'
-```
-
-Use the printed PID as the KernelGuard target.
-
-### 5. Clean up test processes
-
-After testing:
+When running disposable background test processes, ensure they are cleanly terminated after testing:
 
 ```bash
 kill <PID>
-```
-
-Check that the process is gone:
-
-```bash
 ps -p <PID>
 ```
 
-## Current safety principle
+---
 
-KernelGuard should fail toward safety.
+## Safety Principles
 
-A policy mistake must not unintentionally turn a targeted security test into system-wide enforcement.
-
-This guide is for the current alpha/testing stage and should be updated as the enforcement architecture becomes safer and more isolated.
+1. **Fail toward safety:** Any error in environment setup, privilege dropping, or target registration halts execution rather than falling back to unconfined execution.
+2. **Strict PID scoping:** Enforcement is exclusively evaluated against the registered target PID in the kernel's `target_pid_map`.
+3. **Graceful cleanup:** eBPF kprobes and BPF maps are detached and freed on exit (`SIGINT`, `SIGTERM`, or normal script completion).
